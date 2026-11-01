@@ -144,6 +144,76 @@ func TestBudgetMaxTokensClamp(t *testing.T) {
 	}
 }
 
+func TestBudgetMaxTokensClampByCallKind(t *testing.T) {
+	tests := []struct {
+		name      string
+		turnIndex int
+		in        int
+		want      int
+	}{
+		{"chat zero becomes 400", 1, 0, 400},
+		{"chat above 400 is clamped to 400", 2, 1500, 400},
+		{"chat below 400 is kept", 3, 200, 200},
+		{"postmortem zero becomes 1500", PostmortemTurnIndex, 0, 1500},
+		{"postmortem above 1500 is clamped to 1500", PostmortemTurnIndex, 4000, 1500},
+		{"postmortem 1000 is kept", PostmortemTurnIndex, 1000, 1000},
+		{"postmortem 400 is kept, not raised", PostmortemTurnIndex, 400, 400},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fake := &budgetCounter{}
+			b := NewBudget(fake, DefaultLimits())
+			req := budgetReq()
+			req.TurnIndex = tt.turnIndex
+			req.MaxTokens = tt.in
+			if _, _, err := budgetCollect(t, b, req); err != nil {
+				t.Fatal(err)
+			}
+			if got := fake.last().MaxTokens; got != tt.want {
+				t.Errorf("MaxTokens = %d, want %d", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestBudgetPostmortemCallCountsOnce(t *testing.T) {
+	fake := &budgetCounter{}
+	b := NewBudget(fake, Limits{MaxCalls: 1})
+	req := budgetReq()
+	req.TurnIndex = PostmortemTurnIndex
+	req.MaxTokens = 1500
+	if _, _, err := budgetCollect(t, b, req); err != nil {
+		t.Fatalf("postmortem call: %v", err)
+	}
+	if b.Used() != 1 || !b.Exhausted() {
+		t.Errorf("used=%d exhausted=%v, want 1 and true", b.Used(), b.Exhausted())
+	}
+}
+
+func TestBudgetPostmortemLimitDefaultAndOverride(t *testing.T) {
+	if got := DefaultLimits().MaxPostmortemOutputTokens; got != 1500 {
+		t.Errorf("default MaxPostmortemOutputTokens = %d, want 1500", got)
+	}
+	fake := &budgetCounter{}
+	b := NewBudget(fake, Limits{MaxCalls: 2, MaxOutputTokens: 300, MaxPostmortemOutputTokens: 800})
+	req := budgetReq()
+	req.TurnIndex = PostmortemTurnIndex
+	if _, _, err := budgetCollect(t, b, req); err != nil {
+		t.Fatal(err)
+	}
+	if got := fake.last().MaxTokens; got != 800 {
+		t.Errorf("postmortem MaxTokens = %d, want 800", got)
+	}
+	req.TurnIndex = 1
+	req.MaxTokens = 1000
+	if _, _, err := budgetCollect(t, b, req); err != nil {
+		t.Fatal(err)
+	}
+	if got := fake.last().MaxTokens; got != 300 {
+		t.Errorf("chat MaxTokens = %d, want 300", got)
+	}
+}
+
 func TestBudgetDoesNotMutateCallerRequest(t *testing.T) {
 	fake := &budgetCounter{}
 	b := NewBudget(fake, DefaultLimits())

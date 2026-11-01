@@ -12,9 +12,10 @@ import (
 
 // Default per-séance limits from design.md (llm/budget.go).
 const (
-	defaultMaxCalls        = 6
-	defaultMaxInputTokens  = 6000
-	defaultMaxOutputTokens = 400
+	defaultMaxCalls                  = 6
+	defaultMaxInputTokens            = 6000
+	defaultMaxOutputTokens           = 400
+	defaultMaxPostmortemOutputTokens = 1500
 )
 
 // EnvMaxCalls overrides Limits.MaxCalls when it holds a positive integer.
@@ -34,18 +35,25 @@ var ErrBudgetExhausted = errors.New("llm: budget exhausted")
 var ErrInputTooLarge = errors.New("llm: input exceeds per-call token limit")
 
 // Limits caps one séance. A zero or negative field in NewBudget falls back to its default.
+//
+// MaxOutputTokens applies to every call except the postmortem call, which is
+// identified by TurnIndex == PostmortemTurnIndex and capped by
+// MaxPostmortemOutputTokens instead. Both count as one call against MaxCalls.
 type Limits struct {
-	MaxCalls        int
-	MaxInputTokens  int
-	MaxOutputTokens int
+	MaxCalls                  int
+	MaxInputTokens            int
+	MaxOutputTokens           int
+	MaxPostmortemOutputTokens int
 }
 
-// DefaultLimits returns 6 calls, 6000 input tokens and 400 output tokens per call.
+// DefaultLimits returns 6 calls, 6000 input tokens, 400 output tokens per chat call
+// and 1500 output tokens for the postmortem call.
 func DefaultLimits() Limits {
 	return Limits{
-		MaxCalls:        defaultMaxCalls,
-		MaxInputTokens:  defaultMaxInputTokens,
-		MaxOutputTokens: defaultMaxOutputTokens,
+		MaxCalls:                  defaultMaxCalls,
+		MaxInputTokens:            defaultMaxInputTokens,
+		MaxOutputTokens:           defaultMaxOutputTokens,
+		MaxPostmortemOutputTokens: defaultMaxPostmortemOutputTokens,
 	}
 }
 
@@ -85,13 +93,16 @@ func NewBudget(p Provider, l Limits) *Budget {
 	if l.MaxOutputTokens <= 0 {
 		l.MaxOutputTokens = d.MaxOutputTokens
 	}
+	if l.MaxPostmortemOutputTokens <= 0 {
+		l.MaxPostmortemOutputTokens = d.MaxPostmortemOutputTokens
+	}
 	return &Budget{inner: p, limits: l}
 }
 
 // Stream implements Provider. When the budget is spent it emits ExhaustedLine as a
 // single fragment and returns ErrBudgetExhausted without calling the inner provider.
 // Otherwise it trims the request to the input limit, clamps MaxTokens to the output
-// limit, counts the call and delegates. If onDelta fails, that error is returned.
+// limit for the call, counts the call and delegates. If onDelta fails, that error is returned.
 func (b *Budget) Stream(ctx context.Context, req ChatRequest, onDelta func(string) error) (Usage, error) {
 	if b.Exhausted() {
 		return b.exhaustedReply(onDelta)
@@ -124,16 +135,20 @@ func (b *Budget) exhaustedReply(onDelta func(string) error) (Usage, error) {
 }
 
 // prepare trims history until the estimated input fits MaxInputTokens and clamps
-// MaxTokens. It returns ErrInputTooLarge when the evidence and the last user message
-// alone do not fit.
+// MaxTokens to the output limit of the call. It returns ErrInputTooLarge when the
+// evidence and the last user message alone do not fit.
 func (b *Budget) prepare(req ChatRequest) (ChatRequest, error) {
 	msgs := trimToFit(req, b.limits.MaxInputTokens)
 	req.Messages = msgs
 	if estimateTokens(req) > b.limits.MaxInputTokens {
 		return ChatRequest{}, ErrInputTooLarge
 	}
-	if req.MaxTokens <= 0 || req.MaxTokens > b.limits.MaxOutputTokens {
-		req.MaxTokens = b.limits.MaxOutputTokens
+	limit := b.limits.MaxOutputTokens
+	if req.TurnIndex == PostmortemTurnIndex {
+		limit = b.limits.MaxPostmortemOutputTokens
+	}
+	if req.MaxTokens <= 0 || req.MaxTokens > limit {
+		req.MaxTokens = limit
 	}
 	return req, nil
 }

@@ -106,10 +106,10 @@ func BuildEvidence(a *PodAutopsy, opts EvidenceOptions) ([]Evidence, error)
 - 超时 15 秒，失败重试 1 次（见 Error Handling）。
 - 成本控制：
   - 证据包代替原始日志；对话历史只保留最近 4 轮 + 证据。
-  - `budget.go`：每个 séance 默认最多 6 次调用、单次输入 ≤ 6k token、输出 ≤ 400 token；超限返回固定台词。
+  - `budget.go`：每个 séance 默认最多 6 次调用、单次输入 ≤ 6k token；聊天调用（开场白、追问）输出 ≤ 400 token，复盘调用（`TurnIndex == PostmortemTurnIndex`）输出 ≤ 1500 token，复盘也只算一次调用。超限返回固定台词。
   - 开场白按 `(podUID, restartCount, model)` 缓存，重复召唤不重复花钱。
   - 复盘的时间线、证据小节由代码直接从 `PodAutopsy` 填，LLM 只写摘要、根因、建议和行动项。
-- `replay.go`：`--replay` 时按 `(fixtureId, turnIndex)` 读取 `fixtures/replay/*.json`（经 `go:embed` 打包）；`SEANCE_RECORD=1` 时写入。
+- `replay.go`：`--replay` 时读取 `fixtures/replay/*.json`（经 `go:embed` 打包）。开场白（turnIndex 0）和复盘（turnIndex 100）按 `turnIndex` 匹配；追问按问题文本匹配：请求的最后一条用户消息经 `normalizeQuestion` 规范化后，与录音里的 `lastUser` 比较，多条命中时取 turnIndex 最小的，请求的 turnIndex 不必与录音相同。`SEANCE_RECORD=1` 时写入。
 
 #### 配置
 
@@ -136,7 +136,7 @@ type Provider interface {
     Stream(ctx context.Context, req ChatRequest, onDelta func(string) error) (Usage, error)
 }
 // HTTPProvider：真实的 OpenAI 兼容接口
-// ReplayProvider：读取 fixtures/replay/*.json，按 (fixtureID, turnIndex) 回放；找不到录音时退回 MockProvider
+// ReplayProvider：读取 fixtures/replay/*.json。开场白和复盘按 turnIndex 回放，追问按规范化后的问题文本回放；找不到录音时退回 MockProvider
 // MockProvider：按死因 + 证据拼出固定台词（模板），逐字模拟流式输出，带 [E#] 引用
 ```
 

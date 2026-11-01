@@ -385,8 +385,8 @@ func TestGenerateCallParameters(t *testing.T) {
 	if req.Purpose != llm.PurposePostmortem {
 		t.Errorf("Purpose = %q, want %q", req.Purpose, llm.PurposePostmortem)
 	}
-	if req.FixtureID != c.a.Name || req.TurnIndex != 100 || req.MaxTokens != 400 {
-		t.Errorf("FixtureID/TurnIndex/MaxTokens = %q/%d/%d, want %q/100/400", req.FixtureID, req.TurnIndex, req.MaxTokens, c.a.Name)
+	if req.FixtureID != c.a.Name || req.TurnIndex != 100 || req.MaxTokens != 1500 {
+		t.Errorf("FixtureID/TurnIndex/MaxTokens = %q/%d/%d, want %q/100/1500", req.FixtureID, req.TurnIndex, req.MaxTokens, c.a.Name)
 	}
 	if len(req.Evidence) != len(c.ev) {
 		t.Errorf("request carries %d evidence items, want %d", len(req.Evidence), len(c.ev))
@@ -396,6 +396,14 @@ func TestGenerateCallParameters(t *testing.T) {
 	}
 	if !strings.Contains(req.Messages[0].Content, "[E1] (status)") {
 		t.Errorf("system prompt does not list the evidence")
+	}
+	last := -1
+	for _, h := range blockHeaders {
+		i := strings.Index(req.Messages[0].Content, h+"\n")
+		if i <= last {
+			t.Errorf("system prompt header %q missing or out of order", h)
+		}
+		last = i
 	}
 	if !strings.Contains(req.Messages[1].Content, "Cause: OOMKilled") {
 		t.Errorf("user message does not name the cause")
@@ -612,11 +620,14 @@ func malformedOutputs() map[string]string {
 	full := validBlocks
 	noActions := strings.Split(full, "### ACTION_ITEMS")[0]
 	return map[string]string{
-		"missing action items": noActions,
-		"duplicate header":     full + "\n### SUMMARY\nagain [E1]\n",
-		"empty summary":        "### SUMMARY\n\n### ROOT_CAUSE\nx [E1]\n### REMEDIATION\ny\n### ACTION_ITEMS\n- [ ] z\n",
-		"no headers at all":    "The root cause is memory [E1].",
-		"empty output":         "",
+		"missing action items":          noActions,
+		"duplicate header":              full + "\n### SUMMARY\nagain [E1]\n",
+		"empty summary":                 "### SUMMARY\n\n### ROOT_CAUSE\nx [E1]\n### REMEDIATION\ny\n### ACTION_ITEMS\n- [ ] z\n",
+		"no headers at all":             "The root cause is memory [E1].",
+		"empty output":                  "",
+		"truncated after root cause":    "### SUMMARY\nThe container was killed [E1].\n### ROOT_CAUSE\nMemory use exceeded the limit [E1",
+		"truncated inside action items": strings.Split(full, "- [ ] Profile")[0] + "- [ ] Pro",
+		"fewer than three action items": strings.Split(full, "- [ ] Add a memory")[0],
 	}
 }
 
