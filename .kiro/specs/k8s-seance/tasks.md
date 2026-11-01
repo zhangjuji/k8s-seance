@@ -17,7 +17,7 @@
     - _Requirements: 1.1, 1.2, 1.4_
   - [x] 2.2 实现 `CollectAutopsy`（client-go）：Pod 状态、容器 state/lastState、Events、当前与 previous 日志尾部
     - _Requirements: 2.1, 2.5_
-  - [ ] 2.3 实现只读守卫测试：`go test` 扫描 `internal/` 源码，禁止 Create/Update/Patch/Delete/Evict 等写类 API 调用
+  - [x] 2.3 实现只读守卫测试：`go test` 扫描 `internal/` 源码，禁止 Create/Update/Patch/Delete/Evict 等写类 API 调用
     - _Requirements: 2.2_
   - [ ] 2.4 用真实 kind 集群录制 3 个 fixtures（`SEANCE_RECORD=1`），实现 `--fixtures` 加载（`fixtures/embed.go`）
     - _Requirements: 7.1, 7.3_
