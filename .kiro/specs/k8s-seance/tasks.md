@@ -70,6 +70,6 @@
     - _Requirements: 9.2, 9.3_
 
 - [ ] 9. 验收与发布
-  - [ ] 9.1 按 spec.md 第 7 节逐条验收（真实 kind 集群 + `go run ./cmd/seance --fixtures --replay`）
+  - [x] 9.1 按 spec.md 第 7 节逐条验收（真实 kind 集群 + `go run ./cmd/seance --fixtures --replay`）
     - _Requirements: 1.1, 3.1, 3.2, 3.3, 4.4, 5.1, 6.2, 7.2, 8.1_
-  - [ ] 9.2 README：一键运行、样例模式、只读 RBAC、成本说明、「How we used Kiro」
+  - [x] 9.2 README：一键运行、样例模式、只读 RBAC、成本说明、「How we used Kiro」
