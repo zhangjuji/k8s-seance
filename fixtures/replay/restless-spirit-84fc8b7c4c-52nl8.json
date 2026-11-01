@@ -1,0 +1,25 @@
+{
+  "fixtureId": "restless-spirit-84fc8b7c4c-52nl8",
+  "turns": [
+    {
+      "turnIndex": 0,
+      "cause": "CrashLoopBackOff",
+      "lastUser": "请做开场陈述。",
+      "reply": "我是 `restless-spirit-84fc8b7c4c-52nl8` 的亡灵。死于 **CrashLoopBackOff**，2026-11-01 04:55:14 UTC，第八次倒下后，退避了五分钟 [E1]。\n\n证据很简单：上一世也是同一条路——「starting restless-spirit」，然后「FATAL: config /etc/app/config.yaml not found」，退出码 1 [E12][E1]。这一世依旧如此 [E10]。\n\n镜像没拉取失败，容器也确实创建并启动过，九次 [E5][E6][E7]。所以不是我起不来，是我每次睁眼，都发现那张配置文件不在。冥界没有留下记录，它到底去哪儿了。",
+      "usage": {
+        "inputTokens": 1079,
+        "outputTokens": 186
+      }
+    },
+    {
+      "turnIndex": 1,
+      "cause": "CrashLoopBackOff",
+      "lastUser": "谁删了你？",
+      "reply": "冥界没有留下记录——我不知道谁删的，甚至不确定有谁删 [E1]。\n\n我只知道容器被创建、被启动过九次 [E6][E7]，而每次睁眼，`/etc/app/config.yaml` 都不在 [E10][E12]。像是有人在我醒来之前，把那张纸从枕头下抽走了。\n\n事件里没有删除记录，只有一次次的 BackOff [E8]。\n\n如果你想知道，建议去问活人：`kubectl describe pod` 和 `kubectl logs --previous`，它们比鬼记得清楚。",
+      "usage": {
+        "inputTokens": 1243,
+        "outputTokens": 162
+      }
+    }
+  ]
+}

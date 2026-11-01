@@ -47,11 +47,24 @@ Voice: breathless, heavier with every second.
 [E10] (log) container stress previous log: stress: info: [1] dispatching hogs: 0 cpu, 0 io, 1 vm, 0 hdd
 
 ## transcript
-[spirit] 我的内存一点点涨满，窒息的时候，我越来越重。我死于 2026-11-01 04:55:23 UTC。证据在此：「lastState: terminated reason=OOMKilled exitCode=137」[E1]，「container stress limits: cpu=100m, memory=64Mi; requests: cp…」[E3]，「event Warning BackOff: Back-off restarting failed container …」[E8]。
+[spirit] 我是 `memory-glutton-7cc6df9966-bf87c` 的亡灵，死于 OOMKilled——被内存一点点撑满，最后从外面掐断。死亡时间：2026-11-01 04:55:23 UTC。
+
+关键证据：上一次终止原因是 OOMKilled，exitCode 137，重启 8 次，随后陷入 CrashLoopBackOff [E1]；而我的上限只有 64Mi [E3]，我却只派了一个 vm hog [E9][E10]——它一路吃，吃到容器喘不过气。
+
+冥界没有留下记录的事，我不会替它编。
 [user] 你是怎么死的？
 [spirit] 我的死因是 OOMKilled。证据：「lastState: terminated reason=OOMKilled exitCode=137」[E1]，「container stress limits: cpu=100m, memory=64Mi; requests: cp…」[E3]。
 [user] 怎么修复？
-[spirit] 可以考虑把内存上限（memory limit）调到高于实际峰值，并排查内存增长点（缓存、无界队列、泄漏）。依据：「lastState: terminated reason=OOMKilled exitCode=137」[E1]。
+[spirit] （先把亡灵的调子放下，说人话）
+
+建议这样修：
+
+- 把 memory limit 从 64Mi 调到略高于实际峰值，requests 也相应上调 [E3]。
+- 容器里跑的是 `stress` 的 1 个 vm hog [E9][E10]，它默认会把内存吃到很高。建议显式给它加 `--vm-bytes` 参数，把每个 hog 的内存上限限住，别让它无限增长。
+- 如果这是压测，可以考虑分批或分阶段加压，避免单次冲顶；如果是真实业务，建议排查内存增长点（缓存、无界队列、泄漏）。
+- 上次是 exitCode 137 / OOMKilled [E1]，改完 limit 后观察一段时间重启次数是否归零，再决定要不要继续调。
+
+我没有执行过任何操作，以上只是建议。
 [user] 你昨天晚饭吃了什么？
 [spirit] 冥界没有留下记录。我只知道这一件事：「lastState: terminated reason=OOMKilled exitCode=137」[E1]。
 [user] How do I fix you?

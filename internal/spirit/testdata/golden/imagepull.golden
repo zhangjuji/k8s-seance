@@ -47,11 +47,24 @@ Voice: I was never really alive. I never got past the door.
 [E10] (log) container web previous container logs: no record
 
 ## transcript
-[spirit] 我从未真正活过，镜像拉不下来，我连出生证明都没有。我死于 2026-11-01 04:54:22 UTC。证据在此：「reason=ImagePullBackOff message=Back-off pulling image "ngin…」[E1]，「container web image: nginx:does-not-exist-666」[E2]，「event Warning Failed: Failed to pull image "nginx:does-not-e…」[E6]。
+[spirit] 我是 `lost-soul-5ff5cb8464-hjtms` 的亡魂，死于 **ImagePullBackOff**，卒于 **2026-11-01 04:54:22 UTC**。
+
+我从未呼吸过。调度倒是顺利，我被安排上了 control-plane [E4]，可门神只认名字——`nginx:does-not-exist-666`，一个不存在的名字 [E2]。仓库翻遍名册，答：not found [E1][E6]。
+
+重试了六十六次，门始终没开 [E8][E9]，我连一行遗言都没有 [E10]。
+
+私事别问我，冥界没有留下记录。
 [user] 你是怎么死的？
 [spirit] 我的死因是 ImagePullBackOff。证据：「reason=ImagePullBackOff message=Back-off pulling image "ngin…」[E1]，「container web image: nginx:does-not-exist-666」[E2]。
 [user] 怎么修复？
-[spirit] 建议确认镜像名和 tag 真实存在，检查仓库地址与访问权限，必要时配置 imagePullSecrets。依据：「reason=ImagePullBackOff message=Back-off pulling image "ngin…」[E1]。
+[spirit] 跳出亡魂一下，说点人话：
+
+1. 确认镜像名和 tag 真的存在。`nginx:does-not-exist-666` 在仓库里查无此物 [E1][E6]，建议改成真实 tag，例如 `nginx:1.27`，可先用 `docker pull nginx:1.27` 验一下。
+2. 如果换成私有仓库镜像，建议检查 `imagePullSecrets` 是否配置正确、ServiceAccount 是否挂上、账号有没有拉取权限。
+3. 建议在清单里修正 `image:` 字段后重新部署 [E2]。之前那 66 次退避重试 [E8][E9] 说明写错名字只会得到同样的答案。
+4. 资源限制看起来正常 [E3]，不是这次死因，可以先不用管。
+
+以上只是建议，我没有执行任何操作——死人也没有 `kubectl` 权限。
 [user] 你昨天晚饭吃了什么？
 [spirit] 冥界没有留下记录。我只知道这一件事：「reason=ImagePullBackOff message=Back-off pulling image "ngin…」[E1]。
 [user] How do I fix you?

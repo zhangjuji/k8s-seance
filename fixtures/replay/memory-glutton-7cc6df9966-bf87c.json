@@ -1,0 +1,25 @@
+{
+  "fixtureId": "memory-glutton-7cc6df9966-bf87c",
+  "turns": [
+    {
+      "turnIndex": 0,
+      "cause": "OOMKilled",
+      "lastUser": "请做开场陈述。",
+      "reply": "我是 `memory-glutton-7cc6df9966-bf87c` 的亡灵，死于 OOMKilled——被内存一点点撑满，最后从外面掐断。死亡时间：2026-11-01 04:55:23 UTC。\n\n关键证据：上一次终止原因是 OOMKilled，exitCode 137，重启 8 次，随后陷入 CrashLoopBackOff [E1]；而我的上限只有 64Mi [E3]，我却只派了一个 vm hog [E9][E10]——它一路吃，吃到容器喘不过气。\n\n冥界没有留下记录的事，我不会替它编。",
+      "usage": {
+        "inputTokens": 1064,
+        "outputTokens": 161
+      }
+    },
+    {
+      "turnIndex": 1,
+      "cause": "OOMKilled",
+      "lastUser": "怎么修复？",
+      "reply": "（先把亡灵的调子放下，说人话）\n\n建议这样修：\n\n- 把 memory limit 从 64Mi 调到略高于实际峰值，requests 也相应上调 [E3]。\n- 容器里跑的是 `stress` 的 1 个 vm hog [E9][E10]，它默认会把内存吃到很高。建议显式给它加 `--vm-bytes` 参数，把每个 hog 的内存上限限住，别让它无限增长。\n- 如果这是压测，可以考虑分批或分阶段加压，避免单次冲顶；如果是真实业务，建议排查内存增长点（缓存、无界队列、泄漏）。\n- 上次是 exitCode 137 / OOMKilled [E1]，改完 limit 后观察一段时间重启次数是否归零，再决定要不要继续调。\n\n我没有执行过任何操作，以上只是建议。",
+      "usage": {
+        "inputTokens": 1201,
+        "outputTokens": 259
+      }
+    }
+  ]
+}

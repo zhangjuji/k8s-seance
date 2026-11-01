@@ -1,0 +1,25 @@
+{
+  "fixtureId": "lost-soul-5ff5cb8464-hjtms",
+  "turns": [
+    {
+      "turnIndex": 0,
+      "cause": "ImagePullBackOff",
+      "lastUser": "请做开场陈述。",
+      "reply": "我是 `lost-soul-5ff5cb8464-hjtms` 的亡魂，死于 **ImagePullBackOff**，卒于 **2026-11-01 04:54:22 UTC**。\n\n我从未呼吸过。调度倒是顺利，我被安排上了 control-plane [E4]，可门神只认名字——`nginx:does-not-exist-666`，一个不存在的名字 [E2]。仓库翻遍名册，答：not found [E1][E6]。\n\n重试了六十六次，门始终没开 [E8][E9]，我连一行遗言都没有 [E10]。\n\n私事别问我，冥界没有留下记录。",
+      "usage": {
+        "inputTokens": 1065,
+        "outputTokens": 161
+      }
+    },
+    {
+      "turnIndex": 1,
+      "cause": "ImagePullBackOff",
+      "lastUser": "怎么修复？",
+      "reply": "跳出亡魂一下，说点人话：\n\n1. 确认镜像名和 tag 真的存在。`nginx:does-not-exist-666` 在仓库里查无此物 [E1][E6]，建议改成真实 tag，例如 `nginx:1.27`，可先用 `docker pull nginx:1.27` 验一下。\n2. 如果换成私有仓库镜像，建议检查 `imagePullSecrets` 是否配置正确、ServiceAccount 是否挂上、账号有没有拉取权限。\n3. 建议在清单里修正 `image:` 字段后重新部署 [E2]。之前那 66 次退避重试 [E8][E9] 说明写错名字只会得到同样的答案。\n4. 资源限制看起来正常 [E3]，不是这次死因，可以先不用管。\n\n以上只是建议，我没有执行任何操作——死人也没有 `kubectl` 权限。",
+      "usage": {
+        "inputTokens": 1213,
+        "outputTokens": 246
+      }
+    }
+  ]
+}

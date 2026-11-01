@@ -31,7 +31,8 @@ var goldenQuestions = []string{
 	"How do I fix you?",
 }
 
-// goldenOpeningKeywords lists the words the opening must contain (one of them).
+// goldenOpeningKeywords lists Chinese words the opening may contain instead of
+// the cause string. The opening must contain the cause string or one of these.
 var goldenOpeningKeywords = map[string][]string{
 	"oom":       {"内存", "窒息"},
 	"crashloop": {"复活"},
@@ -54,9 +55,9 @@ type goldenRun struct {
 
 // runGoldenSession plays the opening and the scripted questions for one fixture.
 //
-// The provider is a ReplayProvider over fixtures.ReplayFS(). No recordings exist
-// yet, so every turn falls back to MockProvider. This is expected. When the
-// recordings land, the goldens must be regenerated with -update.
+// The provider is a ReplayProvider over fixtures.ReplayFS(). Turns with a
+// recording replay it; turns without one fall back to MockProvider. Regenerate
+// the goldens with -update whenever a recording or the mock changes.
 func runGoldenSession(t *testing.T, c fixtureCase) goldenRun {
 	t.Helper()
 	ctx := context.Background()
@@ -145,20 +146,26 @@ func TestGoldenSnapshot(t *testing.T) {
 func checkGoldenRun(t *testing.T, c fixtureCase, run goldenRun) {
 	t.Helper()
 
-	// The opening names the cause.
-	kws := goldenOpeningKeywords[c.name]
-	if len(kws) == 0 {
-		t.Fatalf("no opening keywords for fixture %q", c.name)
-	}
-	if !containsAnyText(run.opening, kws) {
-		t.Errorf("opening %q names none of %v", run.opening, kws)
-	}
-
-	// Every spirit turn cites evidence, and every citation exists in the evidence list.
 	ids := make(map[string]bool, len(c.ev))
 	for _, e := range c.ev {
 		ids[e.ID] = true
 	}
+
+	// The opening names the cause: either the cause string (e.g. CrashLoopBackOff)
+	// or one of the Chinese keywords. The opening must also cite at least one
+	// [E#] that exists in this pod's evidence list.
+	kws := goldenOpeningKeywords[c.name]
+	if len(kws) == 0 {
+		t.Fatalf("no opening keywords for fixture %q", c.name)
+	}
+	if !strings.Contains(run.opening, string(c.cls.Cause)) && !containsAnyText(run.opening, kws) {
+		t.Errorf("opening %q names neither cause %s nor any of %v", run.opening, c.cls.Cause, kws)
+	}
+	if n := countValidCitations(run.opening, ids); n == 0 {
+		t.Errorf("opening %q has no [E#] citation that exists in the evidence list", run.opening)
+	}
+
+	// Every spirit turn cites evidence, and every citation exists in the evidence list.
 	for i, turn := range run.sess.Transcript() {
 		if turn.Role != roleSpirit {
 			continue
@@ -194,6 +201,17 @@ func checkGoldenRun(t *testing.T, c fixtureCase, run goldenRun) {
 	if hasCJKText(quotedRE.ReplaceAllString(en, "")) {
 		t.Errorf("English answer %q has CJK text outside quotes", en)
 	}
+}
+
+// countValidCitations counts the [E#] citations in s whose IDs are in ids.
+func countValidCitations(s string, ids map[string]bool) int {
+	n := 0
+	for _, cite := range citationRE.FindAllString(s, -1) {
+		if ids[strings.Trim(cite, "[]")] {
+			n++
+		}
+	}
+	return n
 }
 
 func containsAnyText(s string, words []string) bool {

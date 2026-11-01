@@ -49,7 +49,11 @@ Voice: I come back, I fall, I come back again.
 [E12] (log) container app previous log: FATAL: config /etc/app/config.yaml not found
 
 ## transcript
-[spirit] 我被一次次拉回人间，一次次复活又倒下，像一场没人喊停的葬礼。我死于 2026-11-01 04:55:14 UTC。证据在此：「lastState: terminated reason=Error exitCode=1」[E1]，「FATAL: config /etc/app/config.yaml not found」[E10]，「event Warning BackOff: Back-off restarting failed container …」[E8]。
+[spirit] 我是 `restless-spirit-84fc8b7c4c-52nl8` 的亡灵。死于 **CrashLoopBackOff**，2026-11-01 04:55:14 UTC，第八次倒下后，退避了五分钟 [E1]。
+
+证据很简单：上一世也是同一条路——「starting restless-spirit」，然后「FATAL: config /etc/app/config.yaml not found」，退出码 1 [E12][E1]。这一世依旧如此 [E10]。
+
+镜像没拉取失败，容器也确实创建并启动过，九次 [E5][E6][E7]。所以不是我起不来，是我每次睁眼，都发现那张配置文件不在。冥界没有留下记录，它到底去哪儿了。
 [user] 你是怎么死的？
 [spirit] 我的死因是 CrashLoopBackOff。证据：「lastState: terminated reason=Error exitCode=1」[E1]，「FATAL: config /etc/app/config.yaml not found」[E10]。
 [user] 怎么修复？
