@@ -1,0 +1,89 @@
+{
+  "namespace": "seance-demo",
+  "name": "restless-spirit-84fc8b7c4c-52nl8",
+  "uid": "5ce21ea9-ce8a-4b7d-8608-e8b6bb818f5e",
+  "createdAt": "2026-11-01T04:39:10Z",
+  "phase": "Running",
+  "nodeName": "seance-control-plane",
+  "ownerKind": "ReplicaSet",
+  "ownerName": "restless-spirit-84fc8b7c4c",
+  "containers": [
+    {
+      "name": "app",
+      "image": "busybox:1.36",
+      "restartCount": 8,
+      "state": {
+        "kind": "waiting",
+        "reason": "CrashLoopBackOff",
+        "message": "back-off 5m0s restarting failed container=app pod=restless-spirit-84fc8b7c4c-52nl8_seance-demo(5ce21ea9-ce8a-4b7d-8608-e8b6bb818f5e)"
+      },
+      "lastState": {
+        "kind": "terminated",
+        "reason": "Error",
+        "exitCode": 1,
+        "startedAt": "2026-11-01T04:55:14Z",
+        "finishedAt": "2026-11-01T04:55:14Z"
+      },
+      "limits": {
+        "cpu": "100m",
+        "memory": "32Mi"
+      },
+      "requests": {
+        "cpu": "10m",
+        "memory": "16Mi"
+      },
+      "logTail": [
+        "starting restless-spirit",
+        "FATAL: config /etc/app/config.yaml not found"
+      ],
+      "previousLogTail": [
+        "starting restless-spirit",
+        "FATAL: config /etc/app/config.yaml not found"
+      ]
+    }
+  ],
+  "events": [
+    {
+      "type": "Normal",
+      "reason": "Scheduled",
+      "message": "Successfully assigned seance-demo/restless-spirit-84fc8b7c4c-52nl8 to seance-control-plane",
+      "count": 1,
+      "firstTimestamp": "2026-11-01T04:39:10Z",
+      "lastTimestamp": "2026-11-01T04:39:10Z"
+    },
+    {
+      "type": "Normal",
+      "reason": "Pulled",
+      "message": "Container image \"busybox:1.36\" already present on machine and can be accessed by the pod",
+      "count": 9,
+      "firstTimestamp": "2026-11-01T04:39:10Z",
+      "lastTimestamp": "2026-11-01T04:55:14Z"
+    },
+    {
+      "type": "Normal",
+      "reason": "Created",
+      "message": "Container created",
+      "count": 9,
+      "firstTimestamp": "2026-11-01T04:39:10Z",
+      "lastTimestamp": "2026-11-01T04:55:14Z"
+    },
+    {
+      "type": "Normal",
+      "reason": "Started",
+      "message": "Container started",
+      "count": 9,
+      "firstTimestamp": "2026-11-01T04:39:10Z",
+      "lastTimestamp": "2026-11-01T04:55:14Z"
+    },
+    {
+      "type": "Warning",
+      "reason": "BackOff",
+      "message": "Back-off restarting failed container app in pod restless-spirit-84fc8b7c4c-52nl8_seance-demo(5ce21ea9-ce8a-4b7d-8608-e8b6bb818f5e)",
+      "count": 19,
+      "firstTimestamp": "2026-11-01T04:39:12Z",
+      "lastTimestamp": "2026-11-01T04:57:38Z"
+    }
+  ],
+  "collectedAt": "2026-11-01T04:58:45.139738218Z",
+  "source": "fixture"
+}

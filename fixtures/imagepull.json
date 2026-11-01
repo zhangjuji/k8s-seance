@@ -1,0 +1,82 @@
+{
+  "namespace": "seance-demo",
+  "name": "lost-soul-5ff5cb8464-hjtms",
+  "uid": "29058d20-7fdb-4629-bc71-5decbc748901",
+  "createdAt": "2026-11-01T04:39:10Z",
+  "phase": "Pending",
+  "nodeName": "seance-control-plane",
+  "ownerKind": "ReplicaSet",
+  "ownerName": "lost-soul-5ff5cb8464",
+  "containers": [
+    {
+      "name": "web",
+      "image": "nginx:does-not-exist-666",
+      "restartCount": 0,
+      "state": {
+        "kind": "waiting",
+        "reason": "ImagePullBackOff",
+        "message": "Back-off pulling image \"nginx:does-not-exist-666\": ErrImagePull: rpc error: code = NotFound desc = failed to pull and unpack image \"docker.io/library/nginx:does-not-exist-666\": failed to resolve reference \"docker.io/library/nginx:does-not-exist-666\": docker.io/library/nginx:does-not-exist-666: not found"
+      },
+      "limits": {
+        "cpu": "100m",
+        "memory": "64Mi"
+      },
+      "requests": {
+        "cpu": "10m",
+        "memory": "16Mi"
+      }
+    }
+  ],
+  "events": [
+    {
+      "type": "Normal",
+      "reason": "Scheduled",
+      "message": "Successfully assigned seance-demo/lost-soul-5ff5cb8464-hjtms to seance-control-plane",
+      "count": 1,
+      "firstTimestamp": "2026-11-01T04:39:10Z",
+      "lastTimestamp": "2026-11-01T04:39:10Z"
+    },
+    {
+      "type": "Normal",
+      "reason": "Pulling",
+      "message": "Pulling image \"nginx:does-not-exist-666\"",
+      "count": 5,
+      "firstTimestamp": "2026-11-01T04:39:10Z",
+      "lastTimestamp": "2026-11-01T04:42:02Z"
+    },
+    {
+      "type": "Warning",
+      "reason": "Failed",
+      "message": "Failed to pull image \"nginx:does-not-exist-666\": rpc error: code = NotFound desc = failed to pull and unpack image \"docker.io/library/nginx:does-not-exist-666\": failed to resolve reference \"docker.io/library/nginx:does-not-exist-666\": docker.io/library/nginx:does-not-exist-666: not found",
+      "count": 5,
+      "firstTimestamp": "2026-11-01T04:39:11Z",
+      "lastTimestamp": "2026-11-01T04:42:03Z"
+    },
+    {
+      "type": "Warning",
+      "reason": "Failed",
+      "message": "Error: ErrImagePull",
+      "count": 5,
+      "firstTimestamp": "2026-11-01T04:39:11Z",
+      "lastTimestamp": "2026-11-01T04:42:03Z"
+    },
+    {
+      "type": "Normal",
+      "reason": "BackOff",
+      "message": "Back-off pulling image \"nginx:does-not-exist-666\"",
+      "count": 66,
+      "firstTimestamp": "2026-11-01T04:39:11Z",
+      "lastTimestamp": "2026-11-01T04:54:22Z"
+    },
+    {
+      "type": "Warning",
+      "reason": "Failed",
+      "message": "Error: ImagePullBackOff",
+      "count": 66,
+      "firstTimestamp": "2026-11-01T04:39:11Z",
+      "lastTimestamp": "2026-11-01T04:54:22Z"
+    }
+  ],
+  "collectedAt": "2026-11-01T04:58:44.949356399Z",
+  "source": "fixture"
+}

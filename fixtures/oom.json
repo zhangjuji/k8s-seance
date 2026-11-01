@@ -1,0 +1,87 @@
+{
+  "namespace": "seance-demo",
+  "name": "memory-glutton-7cc6df9966-bf87c",
+  "uid": "c0344991-c0a9-4416-b901-58bcf01c1dfb",
+  "createdAt": "2026-11-01T04:39:10Z",
+  "phase": "Running",
+  "nodeName": "seance-control-plane",
+  "ownerKind": "ReplicaSet",
+  "ownerName": "memory-glutton-7cc6df9966",
+  "containers": [
+    {
+      "name": "stress",
+      "image": "polinux/stress:1.0.4",
+      "restartCount": 8,
+      "state": {
+        "kind": "waiting",
+        "reason": "CrashLoopBackOff",
+        "message": "back-off 5m0s restarting failed container=stress pod=memory-glutton-7cc6df9966-bf87c_seance-demo(c0344991-c0a9-4416-b901-58bcf01c1dfb)"
+      },
+      "lastState": {
+        "kind": "terminated",
+        "reason": "OOMKilled",
+        "exitCode": 137,
+        "startedAt": "2026-11-01T04:55:21Z",
+        "finishedAt": "2026-11-01T04:55:23Z"
+      },
+      "limits": {
+        "cpu": "100m",
+        "memory": "64Mi"
+      },
+      "requests": {
+        "cpu": "10m",
+        "memory": "32Mi"
+      },
+      "logTail": [
+        "stress: info: [1] dispatching hogs: 0 cpu, 0 io, 1 vm, 0 hdd"
+      ],
+      "previousLogTail": [
+        "stress: info: [1] dispatching hogs: 0 cpu, 0 io, 1 vm, 0 hdd"
+      ]
+    }
+  ],
+  "events": [
+    {
+      "type": "Normal",
+      "reason": "Scheduled",
+      "message": "Successfully assigned seance-demo/memory-glutton-7cc6df9966-bf87c to seance-control-plane",
+      "count": 1,
+      "firstTimestamp": "2026-11-01T04:39:10Z",
+      "lastTimestamp": "2026-11-01T04:39:10Z"
+    },
+    {
+      "type": "Normal",
+      "reason": "Pulled",
+      "message": "Container image \"polinux/stress:1.0.4\" already present on machine and can be accessed by the pod",
+      "count": 9,
+      "firstTimestamp": "2026-11-01T04:39:10Z",
+      "lastTimestamp": "2026-11-01T04:55:21Z"
+    },
+    {
+      "type": "Normal",
+      "reason": "Created",
+      "message": "Container created",
+      "count": 9,
+      "firstTimestamp": "2026-11-01T04:39:10Z",
+      "lastTimestamp": "2026-11-01T04:55:21Z"
+    },
+    {
+      "type": "Normal",
+      "reason": "Started",
+      "message": "Container started",
+      "count": 9,
+      "firstTimestamp": "2026-11-01T04:39:10Z",
+      "lastTimestamp": "2026-11-01T04:55:21Z"
+    },
+    {
+      "type": "Warning",
+      "reason": "BackOff",
+      "message": "Back-off restarting failed container stress in pod memory-glutton-7cc6df9966-bf87c_seance-demo(c0344991-c0a9-4416-b901-58bcf01c1dfb)",
+      "count": 21,
+      "firstTimestamp": "2026-11-01T04:39:13Z",
+      "lastTimestamp": "2026-11-01T04:57:44Z"
+    }
+  ],
+  "collectedAt": "2026-11-01T04:58:44.974607108Z",
+  "source": "fixture"
+}

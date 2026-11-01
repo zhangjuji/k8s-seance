@@ -12,14 +12,14 @@
   - [x] 1.3 编写 `demo/rbac-readonly.yaml`
     - _Requirements: 8.4, 2.2_
 
-- [ ] 2. 只读采集层
+- [x] 2. 只读采集层
   - [x] 2.1 定义 `PodAutopsy` 等类型（`internal/autopsy/model.go`）；实现 `ListSpirits` 的筛选逻辑
     - _Requirements: 1.1, 1.2, 1.4_
   - [x] 2.2 实现 `CollectAutopsy`（client-go）：Pod 状态、容器 state/lastState、Events、当前与 previous 日志尾部
     - _Requirements: 2.1, 2.5_
   - [x] 2.3 实现只读守卫测试：`go test` 扫描 `internal/` 源码，禁止 Create/Update/Patch/Delete/Evict 等写类 API 调用
     - _Requirements: 2.2_
-  - [ ] 2.4 用真实 kind 集群录制 3 个 fixtures（`SEANCE_RECORD=1`），实现 `--fixtures` 加载（`fixtures/embed.go`）
+  - [x] 2.4 用真实 kind 集群录制 3 个 fixtures（`SEANCE_RECORD=1`），实现 `--fixtures` 加载（`fixtures/embed.go`）
     - _Requirements: 7.1, 7.3_
 
 - [x] 3. 尸检：死因分类与证据

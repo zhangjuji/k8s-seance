@@ -1,9 +1,11 @@
 // Command seance summons dead Pods and prints how they died.
 //
-// Usage: seance [-n namespace] [-kubeconfig path] [-pod name] [-tail 200]
+// Usage: seance [-n namespace] [-kubeconfig path] [-pod name] [-tail 200] [-fixtures]
 //
 // The command is read-only: it only lists and gets Pods, reads their logs and
-// lists Events.
+// lists Events. With -fixtures it reads the embedded recordings and never
+// touches a cluster. With SEANCE_RECORD=1 it also writes each collected Pod to
+// a local fixture file (SEANCE_FIXTURES_DIR, default "fixtures").
 package main
 
 import (
@@ -14,6 +16,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/zhangjuji/k8s-seance/fixtures"
 	"github.com/zhangjuji/k8s-seance/internal/autopsy"
 	"github.com/zhangjuji/k8s-seance/internal/k8s"
 	"github.com/zhangjuji/k8s-seance/internal/llm"
@@ -27,13 +30,20 @@ func main() {
 	kubeconfig := fs.String("kubeconfig", "", "kubeconfig path (default: $KUBECONFIG or ~/.kube/config)")
 	pod := fs.String("pod", "", "summon only this pod")
 	tail := fs.Int("tail", 200, "log lines kept per container")
+	useFixtures := fs.Bool("fixtures", false, "offline: summon the recorded fixture spirits, no cluster access")
 	fs.Usage = func() {
-		fmt.Fprintf(fs.Output(), "Usage: seance [-n namespace] [-kubeconfig path] [-pod name] [-tail 200]\n\n")
+		fmt.Fprintf(fs.Output(), "Usage: seance [-n namespace] [-kubeconfig path] [-pod name] [-tail 200] [-fixtures]\n\n")
 		fs.PrintDefaults()
 	}
 	_ = fs.Parse(os.Args[1:]) // ExitOnError: bad flags exit with status 2, -h with 0.
 
-	if err := run(context.Background(), *namespace, *kubeconfig, *pod, *tail, os.Stdout); err != nil {
+	var err error
+	if *useFixtures {
+		err = runFixtures(context.Background(), *pod, *tail, os.Stdout)
+	} else {
+		err = run(context.Background(), *namespace, *kubeconfig, *pod, *tail, os.Stdout)
+	}
+	if err != nil {
 		fmt.Fprintln(os.Stderr, "seance:", err)
 		os.Exit(1)
 	}
@@ -51,11 +61,40 @@ func run(ctx context.Context, namespace, kubeconfig, pod string, tail int, out i
 	if err != nil {
 		return fmt.Errorf("build clientset: %w", err)
 	}
-	return summon(ctx, cs, namespace, pod, tail, out)
+	return summon(ctx, cs, namespace, pod, tail, recorderFromEnv(os.Stderr), out)
+}
+
+// runFixtures prints the embedded recordings. It never loads a kubeconfig.
+func runFixtures(ctx context.Context, pod string, tail int, out io.Writer) error {
+	all, err := fixtures.Load()
+	if err != nil {
+		return fmt.Errorf("load fixtures: %w", err)
+	}
+	var spirits []*autopsy.PodAutopsy
+	for _, a := range all {
+		if pod == "" || a.Name == pod {
+			spirits = append(spirits, a)
+		}
+	}
+	if len(spirits) == 0 {
+		if pod != "" {
+			fmt.Fprintf(out, "no restless spirit fixtures/%s\n", pod)
+		} else {
+			fmt.Fprintf(out, "no restless spirits in fixtures\n")
+		}
+		return nil
+	}
+	for _, a := range spirits {
+		if err := printAutopsy(ctx, a, tail, out); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // summon lists the spirits in namespace (or only pod) and prints each autopsy.
-func summon(ctx context.Context, cs kubernetes.Interface, namespace, pod string, tail int, out io.Writer) error {
+// A non-nil rec also records each collected autopsy to a fixture file.
+func summon(ctx context.Context, cs kubernetes.Interface, namespace, pod string, tail int, rec *recorder, out io.Writer) error {
 	spirits, err := k8s.ListSpirits(ctx, cs, namespace)
 	if err != nil {
 		return err
@@ -73,7 +112,7 @@ func summon(ctx context.Context, cs kubernetes.Interface, namespace, pod string,
 	}
 
 	for _, s := range spirits {
-		if err := printSpirit(ctx, cs, s.Namespace, s.Name, tail, out); err != nil {
+		if err := printSpirit(ctx, cs, s.Namespace, s.Name, tail, rec, out); err != nil {
 			return err
 		}
 	}
@@ -91,16 +130,25 @@ func filterPod(spirits []autopsy.SpiritSummary, pod string) []autopsy.SpiritSumm
 	return out
 }
 
-// printSpirit prints the header, the evidence list and the ghost's opening line for one Pod.
-func printSpirit(ctx context.Context, cs kubernetes.Interface, namespace, name string, tail int, out io.Writer) error {
+// printSpirit collects one Pod from the cluster, records it if rec is set, then prints it.
+func printSpirit(ctx context.Context, cs kubernetes.Interface, namespace, name string, tail int, rec *recorder, out io.Writer) error {
 	a, err := k8s.CollectAutopsy(ctx, cs, namespace, name)
 	if err != nil {
 		return err
 	}
+	if err := rec.record(a); err != nil {
+		return err
+	}
+	return printAutopsy(ctx, a, tail, out)
+}
+
+// printAutopsy prints the header, the evidence list and the ghost's opening line for one PodAutopsy.
+// It is shared by the cluster and fixtures paths.
+func printAutopsy(ctx context.Context, a *autopsy.PodAutopsy, tail int, out io.Writer) error {
 	c := autopsy.Classify(a)
 	ev, err := autopsy.BuildEvidence(a, autopsy.EvidenceOptions{TailLines: tail})
 	if err != nil {
-		return fmt.Errorf("build evidence for %s/%s: %w", namespace, name, err)
+		return fmt.Errorf("build evidence for %s/%s: %w", a.Namespace, a.Name, err)
 	}
 
 	exit := "-"
@@ -132,7 +180,7 @@ func printSpirit(ctx context.Context, cs kubernetes.Interface, namespace, name s
 		return werr
 	})
 	if err != nil {
-		return fmt.Errorf("stream opening for %s/%s: %w", namespace, name, err)
+		return fmt.Errorf("stream opening for %s/%s: %w", a.Namespace, a.Name, err)
 	}
 	fmt.Fprint(out, "\n\n")
 	return nil
