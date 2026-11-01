@@ -345,7 +345,7 @@ func TestLastWordsRule(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := lastWords(cause, tc.transcript); got != tc.want {
+			if got := lastWords(cause, "pod-x", tc.transcript); got != tc.want {
 				t.Errorf("lastWords = %q, want %q", got, tc.want)
 			}
 		})

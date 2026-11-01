@@ -9,10 +9,13 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 	"text/template"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/zhangjuji/k8s-seance/internal/autopsy"
 	"github.com/zhangjuji/k8s-seance/internal/llm"
@@ -47,8 +50,10 @@ const (
 	transcriptTurns = 8
 	// turnRunes caps each séance turn sent to the model.
 	turnRunes = 200
-	// lastWordsRunes caps the Last words quote.
-	lastWordsRunes = 80
+	// lastWordsMinRunes and lastWordsMaxRunes bound the Last words quote, counted
+	// after cleanup.
+	lastWordsMinRunes = 4
+	lastWordsMaxRunes = 60
 	// roleSpirit is the spirit.Turn.Role value of the ghost's lines.
 	roleSpirit = "spirit"
 	// unknownText is shown for a value the snapshot does not have.
@@ -170,7 +175,7 @@ func Generate(ctx context.Context, in Input, p llm.Provider) (Result, error) {
 	}
 	v := view{
 		Title:       "Postmortem: " + a.Namespace + "/" + a.Name,
-		LastWords:   escapeMD(lastWords(in.Class.Cause, in.Transcript)),
+		LastWords:   escapeMD(lastWords(in.Class.Cause, a.Name, in.Transcript)),
 		Cause:       string(in.Class.Cause),
 		ExitCode:    exitCodeText(in.Class),
 		Restarts:    fmt.Sprint(restarts(a)),
@@ -471,16 +476,17 @@ func impactLines(a *autopsy.PodAutopsy) []string {
 	}
 }
 
-// lastWords returns the first sentence of the séance opening, the ghost speaking
-// about itself. Later spirit turns often give fix advice, so they are never
-// used. The fallback line for the cause is used when the transcript is empty,
-// when its first turn is not a spirit line, or when that line is the
-// exhausted-budget line.
-func lastWords(cause autopsy.CauseOfDeath, transcript []spirit.Turn) string {
+// lastWords returns a line the ghost says about itself, taken from the séance
+// opening (transcript index 0). Later spirit turns often give fix advice, so they
+// are never used. The fallback line for the cause is used when the transcript is
+// empty, when its first turn is not a spirit line, when that line is the
+// exhausted-budget line, or when no sentence of the opening qualifies. See
+// lastWordsSentence for the rules.
+func lastWords(cause autopsy.CauseOfDeath, podName string, transcript []spirit.Turn) string {
 	if len(transcript) > 0 {
 		t := transcript[0]
 		if t.Role == roleSpirit && t.Content != llm.ExhaustedLine {
-			if s := firstSentence(t.Content); s != "" {
+			if s := lastWordsSentence(t.Content, podName); s != "" {
 				return strings.ReplaceAll(s, `"`, "'")
 			}
 		}
@@ -491,18 +497,85 @@ func lastWords(cause autopsy.CauseOfDeath, transcript []spirit.Turn) string {
 	return lastWordsFallback[autopsy.CauseUnknown]
 }
 
-// firstSentence returns s up to and including its first sentence end, shortened
-// to lastWordsRunes runes.
-func firstSentence(s string) string {
-	s = inline(s)
-	var out []rune
-	for _, r := range s {
-		out = append(out, r)
-		if strings.ContainsRune("。！？!?.", r) {
-			break
+var (
+	// citationRE matches an evidence marker such as [E1].
+	citationRE = regexp.MustCompile(`\[E\d+\]`)
+	// timestampRE matches a date (2026-11-01) or a clock time (04:55).
+	timestampRE = regexp.MustCompile(`\d{4}-\d{2}-\d{2}|\d{1,2}:\d{2}`)
+	// markRemover deletes the emphasis and code marks that Markdown uses.
+	markRemover = strings.NewReplacer("*", "", "`", "")
+)
+
+// lastWordsSentence returns the first sentence of s that can be quoted as Last
+// words, or "" when none qualifies. A sentence qualifies when it has no [E#]
+// citation, does not contain podName, has no date or clock time, and is between
+// lastWordsMinRunes and lastWordsMaxRunes runes after cleanup. The checks run on
+// the raw sentence, before the citation markers are removed.
+func lastWordsSentence(s, podName string) string {
+	for _, raw := range splitSentences(s) {
+		if citationRE.MatchString(raw) {
+			continue
+		}
+		if podName != "" && strings.Contains(raw, podName) {
+			continue
+		}
+		if timestampRE.MatchString(raw) {
+			continue
+		}
+		clean := cleanSentence(raw)
+		if n := utf8.RuneCountInString(clean); n < lastWordsMinRunes || n > lastWordsMaxRunes {
+			continue
+		}
+		return clean
+	}
+	return ""
+}
+
+// splitSentences cuts s after each of 。！？!? and at each newline. An ASCII '.'
+// also ends a sentence, but only when whitespace or the end of s follows it, so
+// "1.36", "nginx:1.27" and "app.yaml" stay whole. The end mark stays with its
+// sentence, and a newline is dropped. Empty pieces are skipped.
+func splitSentences(s string) []string {
+	var out []string
+	var cur strings.Builder
+	flush := func() {
+		if t := strings.TrimSpace(cur.String()); t != "" {
+			out = append(out, t)
+		}
+		cur.Reset()
+	}
+	for i, r := range s {
+		switch {
+		case r == '\n':
+			flush()
+		case strings.ContainsRune("。！？!?", r):
+			cur.WriteRune(r)
+			flush()
+		case r == '.' && asciiDotEndsSentence(s[i+1:]):
+			cur.WriteRune(r)
+			flush()
+		default:
+			cur.WriteRune(r)
 		}
 	}
-	return truncate(strings.TrimSpace(string(out)), lastWordsRunes)
+	flush()
+	return out
+}
+
+// asciiDotEndsSentence reports whether an ASCII '.' followed by rest ends a
+// sentence. It does when rest is empty or starts with whitespace.
+func asciiDotEndsSentence(rest string) bool {
+	if rest == "" {
+		return true
+	}
+	r, _ := utf8.DecodeRuneInString(rest)
+	return unicode.IsSpace(r)
+}
+
+// cleanSentence removes [E#] markers and the Markdown emphasis and code marks,
+// then collapses runs of spaces.
+func cleanSentence(s string) string {
+	return inline(markRemover.Replace(citationRE.ReplaceAllString(s, "")))
 }
 
 // truncate shortens s to n runes and adds an ellipsis when it cuts.
