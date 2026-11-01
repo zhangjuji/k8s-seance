@@ -3,6 +3,7 @@ package llm
 
 import (
 	"context"
+	"io/fs"
 	"os"
 	"strings"
 
@@ -22,6 +23,11 @@ type ChatRequest struct {
 	PodName   string
 	Evidence  []autopsy.Evidence
 	MaxTokens int
+	// FixtureID is the replay key. The session code sets it to the pod name.
+	FixtureID string
+	// TurnIndex is 0 for the opening and 1.. for follow-ups. The postmortem
+	// generator uses its own index set by its caller.
+	TurnIndex int
 }
 
 // Usage holds the token counts of one call. The mock provider reports rough rune counts.
@@ -43,23 +49,29 @@ const (
 	ModeMock   = "mock"
 )
 
-// SelectProvider picks the Provider to use. mode comes from a flag. If it is
-// empty, SEANCE_LLM_MODE is used. If both are empty, the result is http when
-// cfg is complete and mock otherwise. Unknown modes and incomplete config
-// fall back to mock, so no call is made without a configured endpoint.
-func SelectProvider(cfg Config, mode string) Provider {
+// resolveMode normalizes mode. If mode is empty, SEANCE_LLM_MODE is used.
+func resolveMode(mode string) string {
 	mode = strings.ToLower(strings.TrimSpace(mode))
 	if mode == "" {
 		mode = strings.ToLower(strings.TrimSpace(os.Getenv("SEANCE_LLM_MODE")))
 	}
-	switch mode {
+	return mode
+}
+
+// SelectProvider picks the Provider to use. mode comes from a flag. If it is
+// empty, SEANCE_LLM_MODE is used. If both are empty, the result is http when
+// cfg is complete and mock otherwise. Unknown modes and incomplete config
+// fall back to mock, so no call is made without a configured endpoint.
+// SelectProvider has no replay files, so "replay" also gives MockProvider.
+// NewProvider builds the replay provider.
+func SelectProvider(cfg Config, mode string) Provider {
+	switch resolveMode(mode) {
 	case ModeHTTP:
 		if cfg.Complete() {
 			return HTTPProvider{Config: cfg}
 		}
 		return MockProvider{}
 	case ModeReplay:
-		// TODO(4.4): return ReplayProvider once replay.go exists. Mock until then.
 		return MockProvider{}
 	case ModeMock:
 		return MockProvider{}
@@ -71,4 +83,22 @@ func SelectProvider(cfg Config, mode string) Provider {
 	default:
 		return MockProvider{}
 	}
+}
+
+// NewProvider builds the Provider for a run. mode is resolved as in SelectProvider.
+// Mode "replay" gives a ReplayProvider over replayFS, with MockProvider as the
+// fallback. Otherwise the result is SelectProvider's choice. If record is true and
+// that choice is an HTTPProvider, it is wrapped in a Recorder that writes into
+// recordDir. A MockProvider is never wrapped, because recording mock output would
+// only save the template text.
+func NewProvider(cfg Config, mode string, record bool, replayFS fs.FS, recordDir string) Provider {
+	mode = resolveMode(mode)
+	if mode == ModeReplay {
+		return &ReplayProvider{FS: replayFS}
+	}
+	p := SelectProvider(cfg, mode)
+	if _, ok := p.(HTTPProvider); ok && record {
+		return &Recorder{Inner: p, Dir: recordDir}
+	}
+	return p
 }

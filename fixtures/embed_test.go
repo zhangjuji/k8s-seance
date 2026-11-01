@@ -1,6 +1,7 @@
 package fixtures
 
 import (
+	"io/fs"
 	"testing"
 
 	"github.com/zhangjuji/k8s-seance/internal/autopsy"
@@ -27,5 +28,11 @@ func TestLoadReturnsThreeClassifiedSpirits(t *testing.T) {
 		if got := autopsy.Classify(a).Cause; got != want[i] {
 			t.Errorf("autopsy %d (%s): cause = %s, want %s", i, a.Name, got, want[i])
 		}
+	}
+}
+
+func TestReplayFSHasReadme(t *testing.T) {
+	if _, err := fs.Stat(ReplayFS(), "README.md"); err != nil {
+		t.Fatalf("ReplayFS: %v", err)
 	}
 }

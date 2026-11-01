@@ -16,7 +16,7 @@ func TestSelectProvider(t *testing.T) {
 		{"explicit http with complete config", complete, "http", "", "http"},
 		{"explicit http with incomplete config falls back to mock", Config{}, "http", "", "mock"},
 		{"explicit mock wins over complete config", complete, "mock", "", "mock"},
-		{"replay is mock until task 4.4", complete, "replay", "", "mock"},
+		{"replay without files is mock", complete, "replay", "", "mock"},
 		{"unknown mode falls back to mock", complete, "bogus", "", "mock"},
 		{"flag beats env", complete, "mock", "http", "mock"},
 		{"env used when flag empty", complete, "", "mock", "mock"},

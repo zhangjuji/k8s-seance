@@ -35,7 +35,7 @@
     - _Requirements: 6.1_
   - [x] 4.3 `internal/llm/budget.go`：调用次数 / token 上限、开场白缓存、超限台词
     - _Requirements: 6.2, 6.3_
-  - [ ] 4.4 `internal/llm/replay.go`：`ReplayProvider`，录制与回放，缺录音时退回 mock
+  - [x] 4.4 `internal/llm/replay.go`：`ReplayProvider`，录制与回放，缺录音时退回 mock
     - _Requirements: 7.2, 7.3, 7.5_
   - [ ] 4.5 拿到巨基提供的接口地址和 key 后，用真实接口跑 3 个亡灵并录制 `fixtures/replay/`
     - _Requirements: 6.1, 7.3_

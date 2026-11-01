@@ -6,12 +6,18 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 
 	"github.com/zhangjuji/k8s-seance/internal/autopsy"
 )
 
 //go:embed *.json
 var files embed.FS
+
+// replayFS holds the recorded spirit replies (replay/<fixture-id>.json).
+//
+//go:embed replay
+var replayFS embed.FS
 
 // fixtureFiles lists the recordings in the order Load returns them.
 var fixtureFiles = []string{"oom.json", "crashloop.json", "imagepull.json"}
@@ -32,4 +38,15 @@ func Load() ([]*autopsy.PodAutopsy, error) {
 		out = append(out, &a)
 	}
 	return out, nil
+}
+
+// ReplayFS returns the recorded spirit replies with the replay/ prefix removed,
+// so the files sit at the root of the returned FS. It is the FS for llm.ReplayProvider.
+func ReplayFS() fs.FS {
+	sub, err := fs.Sub(replayFS, "replay")
+	if err != nil {
+		// Only an invalid path makes fs.Sub fail, and "replay" is valid.
+		return nil
+	}
+	return sub
 }
