@@ -49,6 +49,7 @@ K8s 降灵会（K8s Séance）是一个本地运行的 Web 应用：用户从集
 1. WHEN 任一容器 `lastState.terminated.reason` 或 `state.terminated.reason` 为 `OOMKilled`（或 exitCode 为 137 且有 OOM 事件）THEN the system SHALL 将死因分类为 `OOMKilled`。
 2. WHEN `state.waiting.reason` 为 `ImagePullBackOff` 或 `ErrImagePull` THEN the system SHALL 将死因分类为 `ImagePullBackOff`。
 3. WHEN `state.waiting.reason` 为 `CrashLoopBackOff` 且不满足 1.1 的条件 THEN the system SHALL 将死因分类为 `CrashLoopBackOff`，并记录最近一次退出码。
+   - 实测发现（真实 kind v1.37）：崩溃循环的容器常见的观察形态是 `state.terminated.reason=Error`、`restartCount>0`，并伴随 reason 为 `BackOff`、消息以 `Back-off restarting failed container` 开头的 Warning 事件；分类器同样将其判为 `CrashLoopBackOff`。
 4. WHEN 存在 reason 为 `Unhealthy` 且消息包含 Liveness、Readiness 或 Startup probe 的事件 THEN the system SHALL 将探针失败作为死因或附加死因。
 5. WHEN 容器以非 0 退出码终止且不匹配以上规则 THEN the system SHALL 分类为 `Error`。
 6. IF 以上规则都不匹配 THEN the system SHALL 分类为 `Unknown`。
