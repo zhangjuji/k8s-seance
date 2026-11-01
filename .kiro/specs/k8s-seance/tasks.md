@@ -13,7 +13,7 @@
     - _Requirements: 8.4, 2.2_
 
 - [ ] 2. 只读采集层
-  - [ ] 2.1 定义 `PodAutopsy` 等类型（`internal/autopsy/model.go`）；实现 `ListSpirits` 的筛选逻辑
+  - [x] 2.1 定义 `PodAutopsy` 等类型（`internal/autopsy/model.go`）；实现 `ListSpirits` 的筛选逻辑
     - _Requirements: 1.1, 1.2, 1.4_
   - [ ] 2.2 实现 `CollectAutopsy`（client-go）：Pod 状态、容器 state/lastState、Events、当前与 previous 日志尾部
     - _Requirements: 2.1, 2.5_
