@@ -9,7 +9,7 @@
     - [ ] Devpost Didit identity verification (human: juji)
   - [x] 1.2 编写 `demo/kind-config.yaml`、`oom.yaml`、`crashloop.yaml`、`imagepull.yaml` 和 `kill-them-all.sh`（含 `--cleanup`）
     - _Requirements: 8.1, 8.2, 8.3_
-  - [ ] 1.3 编写 `demo/rbac-readonly.yaml`
+  - [x] 1.3 编写 `demo/rbac-readonly.yaml`
     - _Requirements: 8.4, 2.2_
 
 - [ ] 2. 只读采集层

@@ -1,0 +1,50 @@
+# K8s Séance read-only RBAC.
+#
+# Grants the seance ServiceAccount get/list/watch on pods, pods/log and events.
+# Nothing else. No write verbs, no other resources.
+#
+# The namespace "seance-demo" must exist before applying this file, because the
+# ServiceAccount is namespaced. demo/kill-them-all.sh creates it. To create it
+# by hand:
+#   kubectl create namespace seance-demo
+#
+# Apply:
+#   kubectl apply -f demo/rbac-readonly.yaml
+#
+# Verify (expected results in the comments):
+#   kubectl auth can-i --as=system:serviceaccount:seance-demo:k8s-seance list pods -A        # yes
+#   kubectl auth can-i --as=system:serviceaccount:seance-demo:k8s-seance get pods/log -A     # yes
+#   kubectl auth can-i --as=system:serviceaccount:seance-demo:k8s-seance list events -A      # yes
+#   kubectl auth can-i --as=system:serviceaccount:seance-demo:k8s-seance delete pods -A      # no
+#   kubectl auth can-i --as=system:serviceaccount:seance-demo:k8s-seance create pods -A      # no
+#   kubectl auth can-i --as=system:serviceaccount:seance-demo:k8s-seance get secrets -A      # no
+#
+# Remove:
+#   kubectl delete -f demo/rbac-readonly.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: k8s-seance-readonly
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "pods/log", "events"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: k8s-seance
+  namespace: seance-demo
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: k8s-seance-readonly
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: k8s-seance-readonly
+subjects:
+  - kind: ServiceAccount
+    name: k8s-seance
+    namespace: seance-demo
