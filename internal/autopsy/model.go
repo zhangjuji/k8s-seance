@@ -81,7 +81,7 @@ type Evidence struct {
 }
 
 // SpiritSummary is one row in the spirit list (Req 1.2).
-// Cause stays empty until the classifier is wired in (task 3.1).
+// Cause is empty when produced by the k8s list call. Classify a PodAutopsy to get it.
 type SpiritSummary struct {
 	Namespace    string       `json:"namespace"`
 	Name         string       `json:"name"`

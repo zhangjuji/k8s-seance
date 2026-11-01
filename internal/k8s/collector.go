@@ -73,7 +73,8 @@ func ListSpirits(ctx context.Context, cs kubernetes.Interface, namespace string)
 		}
 		summaries = append(summaries, summarize(pod))
 	}
-	// TODO(task 3.1): fill Cause using the classifier in internal/autopsy/classifier.go.
+	// Cause is left empty here. The list has no Events, so callers run CollectAutopsy
+	// and autopsy.Classify on the Pods they pick.
 	return summaries, nil
 }
 
