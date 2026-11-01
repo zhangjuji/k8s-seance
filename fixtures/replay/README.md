@@ -64,6 +64,17 @@ export SEANCE_LLM_MODEL=...
 SEANCE_RECORD=1 go run ./cmd/seance -n seance-demo
 ```
 
-Each HTTP reply is saved into this directory, and an existing turn with the
-same `turnIndex` is replaced. Mock replies are never recorded. Commit the
-resulting files so the offline demo works for everyone.
+With `SEANCE_RECORD=1`, each turn is looked up in the files already in this
+directory first, using the Lookup rules above. A turn that is already recorded
+is streamed from the file, with no API call and no write. Only a turn with no
+match calls the endpoint, and that reply is saved. So re-recording a session
+calls the API only for turns that are missing.
+
+- Empty (whitespace-only) replies are not saved. Failed calls are not saved either.
+- A saved turn replaces an existing turn with the same `turnIndex`. This happens
+  only when a follow-up with a new question lands on that index, because a
+  matching question is answered from the file instead.
+- To record a turn again, delete it from its file, then run the command again.
+- Mock replies are never recorded.
+
+Commit the resulting files so the offline demo works for everyone.

@@ -102,7 +102,8 @@ func SelectProvider(cfg Config, mode string) Provider {
 // fallback. Otherwise the result is SelectProvider's choice. If record is true and
 // that choice is an HTTPProvider, it is wrapped in a Recorder that writes into
 // recordDir. A MockProvider is never wrapped, because recording mock output would
-// only save the template text.
+// only save the template text. A Recorder answers from recordDir when the turn is
+// already recorded, so it calls the API only for missing turns.
 func NewProvider(cfg Config, mode string, record bool, replayFS fs.FS, recordDir string) Provider {
 	mode = resolveMode(mode)
 	if mode == ModeReplay {

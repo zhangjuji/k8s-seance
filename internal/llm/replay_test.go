@@ -415,34 +415,36 @@ func TestRecorderStoresCauseAndLastUser(t *testing.T) {
 }
 
 func TestRecorderUpsertReplacesSameTurn(t *testing.T) {
+	// A recorded turn is answered from disk, so replacement only happens on a miss:
+	// a different question at an index that already has a turn replaces that turn.
 	dir := t.TempDir()
 	first := &Recorder{Inner: &fakeProvider{reply: "first", usage: Usage{InputTokens: 1, OutputTokens: 1}}, Dir: dir}
 	second := &Recorder{Inner: &fakeProvider{reply: "second", usage: Usage{InputTokens: 2, OutputTokens: 2}}, Dir: dir}
 	third := &Recorder{Inner: &fakeProvider{reply: "third"}, Dir: dir}
 	nop := func(string) error { return nil }
 
-	if _, err := first.Stream(context.Background(), oomRequest("oom-demo", 0), nop); err != nil {
+	if _, err := first.Stream(context.Background(), chatRequest(1, "怎么修复？"), nop); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := second.Stream(context.Background(), oomRequest("oom-demo", 0), nop); err != nil {
+	if _, err := second.Stream(context.Background(), chatRequest(1, "谁删了你？"), nop); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := third.Stream(context.Background(), oomRequest("oom-demo", 1), nop); err != nil {
+	if _, err := third.Stream(context.Background(), chatRequest(2, "别的问题"), nop); err != nil {
 		t.Fatal(err)
 	}
 
 	stored := readStoredRecording(t, dir, "oom-demo.json")
 	if len(stored.Turns) != 2 {
-		t.Fatalf("turns = %+v, want 2 (replaced turn 0, added turn 1)", stored.Turns)
+		t.Fatalf("turns = %+v, want 2 (replaced turn 1, added turn 2)", stored.Turns)
 	}
-	if stored.Turns[0].TurnIndex != 0 || stored.Turns[0].Reply != "second" {
-		t.Errorf("turn 0 = %+v, want reply %q", stored.Turns[0], "second")
+	if stored.Turns[0].TurnIndex != 1 || stored.Turns[0].Reply != "second" {
+		t.Errorf("turn 1 = %+v, want reply %q", stored.Turns[0], "second")
 	}
 	if want := (recordedUsage{InputTokens: 2, OutputTokens: 2}); stored.Turns[0].Usage != want {
-		t.Errorf("turn 0 usage = %+v, want %+v", stored.Turns[0].Usage, want)
+		t.Errorf("turn 1 usage = %+v, want %+v", stored.Turns[0].Usage, want)
 	}
-	if stored.Turns[1].TurnIndex != 1 || stored.Turns[1].Reply != "third" {
-		t.Errorf("turn 1 = %+v, want reply %q", stored.Turns[1], "third")
+	if stored.Turns[1].TurnIndex != 2 || stored.Turns[1].Reply != "third" {
+		t.Errorf("turn 2 = %+v, want reply %q", stored.Turns[1], "third")
 	}
 }
 
@@ -457,7 +459,7 @@ func TestRecorderConcurrentWritesKeepAllTurns(t *testing.T) {
 		wg.Add(1)
 		go func(turn int) {
 			defer wg.Done()
-			if _, err := rec.Stream(context.Background(), oomRequest("oom-demo", turn), func(string) error { return nil }); err != nil {
+			if _, err := rec.Stream(context.Background(), chatRequest(turn, fmt.Sprintf("question %d", turn)), func(string) error { return nil }); err != nil {
 				errs <- err
 			}
 		}(i)

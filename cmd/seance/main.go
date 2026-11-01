@@ -15,7 +15,8 @@
 // opening line comes from the LLM provider: -replay uses the recorded replies,
 // -mock uses the template, and otherwise SEANCE_LLM_MODE or the config decide.
 // With SEANCE_RECORD=1 and an HTTP provider, the replies are recorded to
-// fixtures/replay.
+// fixtures/replay. Turns already recorded there are replayed without an API call,
+// so only missing turns reach the API.
 package main
 
 import (

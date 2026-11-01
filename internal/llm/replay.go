@@ -94,6 +94,12 @@ func (p *ReplayProvider) Stream(ctx context.Context, req ChatRequest, onDelta fu
 		return Usage{}, err
 	}
 
+	return streamTurn(ctx, turn, p.Delay, onDelta)
+}
+
+// streamTurn sends the reply of turn in chunkRunes-sized fragments, pausing delay
+// after each one (zero means no pause), and returns the recorded usage.
+func streamTurn(ctx context.Context, turn recordedTurn, delay time.Duration, onDelta func(string) error) (Usage, error) {
 	runes := []rune(turn.Reply)
 	for start := 0; start < len(runes); start += chunkRunes {
 		if err := ctx.Err(); err != nil {
@@ -103,8 +109,8 @@ func (p *ReplayProvider) Stream(ctx context.Context, req ChatRequest, onDelta fu
 		if err := onDelta(string(runes[start:end])); err != nil {
 			return Usage{}, err
 		}
-		if p.Delay > 0 {
-			timer := time.NewTimer(p.Delay)
+		if delay > 0 {
+			timer := time.NewTimer(delay)
 			select {
 			case <-ctx.Done():
 				timer.Stop()
@@ -134,6 +140,13 @@ func (p *ReplayProvider) fallback() Provider {
 //     after normalizeQuestion. The lowest TurnIndex wins when several match.
 //     The request's TurnIndex does not have to match the recorded one.
 func (p *ReplayProvider) lookup(req ChatRequest) (recordedTurn, bool) {
+	return findTurn(p.load, req)
+}
+
+// findTurn applies the lookup rules to the recording that load returns for the
+// request's fixture file. load returns nil when the file cannot be used.
+// ReplayProvider and Recorder share it, so both match requests the same way.
+func findTurn(load func(name string) *recording, req ChatRequest) (recordedTurn, bool) {
 	if req.FixtureID == "" {
 		return recordedTurn{}, false
 	}
@@ -141,7 +154,7 @@ func (p *ReplayProvider) lookup(req ChatRequest) (recordedTurn, bool) {
 	if !ok {
 		return recordedTurn{}, false
 	}
-	rec := p.load(name)
+	rec := load(name)
 	if rec == nil || rec.FixtureID != req.FixtureID {
 		return recordedTurn{}, false
 	}
@@ -227,13 +240,17 @@ func readRecording(fsys fs.FS, name string) *recording {
 	return &rec
 }
 
-// Recorder passes each request to Inner and writes each successful reply to
-// Dir/<sanitized fixtureID>.json. A turn with the same TurnIndex as an existing
-// one replaces it. Other turns in the file are kept. Failed calls are not recorded.
-// Each turn stores the last user message as sent. Replay compares it through
-// normalizeQuestion, so the same question matches whatever index it is asked at.
-// A file that exists but cannot be decoded, or that belongs to another fixture ID,
-// is an error and is not overwritten.
+// Recorder answers a request from the recordings already in Dir when one matches,
+// using the same rules as ReplayProvider. The files are read on every call, so a
+// turn saved earlier in the process is seen. Such a hit makes no call to Inner
+// and writes nothing. On a miss, Recorder calls Inner, streams its output through
+// onDelta and saves the full reply into Dir/<sanitized fixtureID>.json. A turn
+// with the same TurnIndex as an existing one replaces it. Other turns in the file
+// are kept. Failed calls, and replies that are empty or whitespace only, are not
+// saved. Each saved turn stores the last user message as sent. Replay compares it
+// through normalizeQuestion, so the same question matches whatever index it is
+// asked at. A file that exists but cannot be decoded, or that belongs to another
+// fixture ID, is an error and is not overwritten.
 type Recorder struct {
 	Inner Provider
 	Dir   string
@@ -243,14 +260,20 @@ type Recorder struct {
 
 var _ Provider = (*Recorder)(nil)
 
-// Stream implements Provider. It streams Inner's output through onDelta, then
-// saves the full reply. If the save fails, the usage is returned with the error.
+// errEmptyReply is returned when Inner finishes without any visible text. Nothing is saved.
+var errEmptyReply = errors.New("record: empty reply, nothing saved")
+
+// Stream implements Provider. See Recorder for the hit and miss behaviour. On a
+// miss, it returns the usage with the error when the save fails.
 func (r *Recorder) Stream(ctx context.Context, req ChatRequest, onDelta func(string) error) (Usage, error) {
 	if r.Inner == nil {
 		return Usage{}, errors.New("record: nil inner provider")
 	}
 	if onDelta == nil {
 		return Usage{}, errors.New("record: nil onDelta")
+	}
+	if turn, ok := r.recorded(req); ok {
+		return streamTurn(ctx, turn, 0, onDelta)
 	}
 	var reply strings.Builder
 	usage, err := r.Inner.Stream(ctx, req, func(s string) error {
@@ -260,10 +283,23 @@ func (r *Recorder) Stream(ctx context.Context, req ChatRequest, onDelta func(str
 	if err != nil {
 		return usage, err
 	}
+	if strings.TrimSpace(reply.String()) == "" {
+		return usage, errEmptyReply
+	}
 	if err := r.save(req, reply.String(), usage); err != nil {
 		return usage, err
 	}
 	return usage, nil
+}
+
+// recorded looks up req in the recordings on disk. It returns false when Dir is
+// empty, so no read is attempted from the current directory.
+func (r *Recorder) recorded(req ChatRequest) (recordedTurn, bool) {
+	if r.Dir == "" {
+		return recordedTurn{}, false
+	}
+	fsys := os.DirFS(r.Dir)
+	return findTurn(func(name string) *recording { return readRecording(fsys, name) }, req)
 }
 
 // save upserts one turn into the fixture file.
