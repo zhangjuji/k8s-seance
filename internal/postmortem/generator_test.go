@@ -259,25 +259,23 @@ func TestImpactAndMetadataFromSnapshot(t *testing.T) {
 	}
 }
 
-func TestLastWordsIsSpiritLine(t *testing.T) {
+func TestLastWordsIsOpeningLine(t *testing.T) {
 	cases := loadCases(t)
 	oom := cases[0]
 	res := generateCase(t, oom)
-	want := expectedFirstSentence(spiritLine(t, oom.turns))
+	want := expectedFirstSentence(openingLine(t, oom.turns))
 	if !strings.Contains(res.Markdown, "> Last words: \""+want+"\"") {
 		t.Errorf("last words %q not found in:\n%s", want, res.Markdown)
 	}
 }
 
-func spiritLine(t *testing.T, turns []spirit.Turn) string {
+// openingLine returns the spirit opening, which is transcript index 0.
+func openingLine(t *testing.T, turns []spirit.Turn) string {
 	t.Helper()
-	for i := len(turns) - 1; i >= 0; i-- {
-		if turns[i].Role == "spirit" && turns[i].Content != llm.ExhaustedLine {
-			return turns[i].Content
-		}
+	if len(turns) == 0 || turns[0].Role != "spirit" {
+		t.Fatal("transcript does not start with a spirit opening")
 	}
-	t.Fatal("no spirit line in transcript")
-	return ""
+	return turns[0].Content
 }
 
 func TestLastWordsFallbackWithoutSpiritLine(t *testing.T) {
@@ -293,6 +291,83 @@ func TestLastWordsFallbackWithoutSpiritLine(t *testing.T) {
 	}
 	if !strings.Contains(res.Markdown, "> Last words: \""+lastWordsFallback[autopsy.CauseOOMKilled]+"\"") {
 		t.Errorf("fallback last words missing:\n%s", res.Markdown)
+	}
+}
+
+func TestLastWordsRule(t *testing.T) {
+	const opening = "我的内存一点点涨满，窒息的时候，我越来越重。"
+	const advice = "可以考虑把内存上限调高一些。"
+	cause := autopsy.CauseOOMKilled
+	fallback := lastWordsFallback[cause]
+	cases := []struct {
+		name       string
+		transcript []spirit.Turn
+		want       string
+	}{
+		{
+			name: "opening is used, not later advice",
+			transcript: []spirit.Turn{
+				{Role: "spirit", Content: opening},
+				{Role: "user", Content: "怎么修复？"},
+				{Role: "spirit", Content: advice},
+			},
+			want: opening,
+		},
+		{
+			name:       "empty transcript falls back",
+			transcript: nil,
+			want:       fallback,
+		},
+		{
+			name: "exhausted opening falls back, advice is not used",
+			transcript: []spirit.Turn{
+				{Role: "spirit", Content: llm.ExhaustedLine},
+				{Role: "user", Content: "怎么修复？"},
+				{Role: "spirit", Content: advice},
+			},
+			want: fallback,
+		},
+		{
+			name: "only exhausted spirit turn falls back",
+			transcript: []spirit.Turn{
+				{Role: "spirit", Content: llm.ExhaustedLine},
+			},
+			want: fallback,
+		},
+		{
+			name: "transcript not starting with spirit falls back",
+			transcript: []spirit.Turn{
+				{Role: "user", Content: "hi"},
+				{Role: "spirit", Content: advice},
+			},
+			want: fallback,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := lastWords(cause, tc.transcript); got != tc.want {
+				t.Errorf("lastWords = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestLastWordsIgnoresAdviceInGenerate(t *testing.T) {
+	c := loadCases(t)[0]
+	transcript := []spirit.Turn{
+		{Role: "spirit", Content: "我的内存一点点涨满，窒息的时候，我越来越重。"},
+		{Role: "user", Content: "怎么修复？"},
+		{Role: "spirit", Content: "可以考虑把内存上限调高一些。"},
+	}
+	res, err := Generate(context.Background(), Input{Autopsy: c.a, Class: c.cls, Evidence: c.ev, Transcript: transcript}, validProvider(t))
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	if !strings.Contains(res.Markdown, "> Last words: \"我的内存一点点涨满，窒息的时候，我越来越重。\"") {
+		t.Errorf("last words is not the opening:\n%s", res.Markdown)
+	}
+	if strings.Contains(res.Markdown, "> Last words: \"可以考虑") {
+		t.Errorf("last words quotes fix advice:\n%s", res.Markdown)
 	}
 }
 

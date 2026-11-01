@@ -452,16 +452,18 @@ func impactLines(a *autopsy.PodAutopsy) []string {
 	}
 }
 
-// lastWords returns the first sentence of the last spirit line that is not the
-// exhausted-budget line. It falls back to a fixed line for the cause.
+// lastWords returns the first sentence of the séance opening, the ghost speaking
+// about itself. Later spirit turns often give fix advice, so they are never
+// used. The fallback line for the cause is used when the transcript is empty,
+// when its first turn is not a spirit line, or when that line is the
+// exhausted-budget line.
 func lastWords(cause autopsy.CauseOfDeath, transcript []spirit.Turn) string {
-	for i := len(transcript) - 1; i >= 0; i-- {
-		t := transcript[i]
-		if t.Role != roleSpirit || t.Content == llm.ExhaustedLine {
-			continue
-		}
-		if s := firstSentence(t.Content); s != "" {
-			return strings.ReplaceAll(s, `"`, "'")
+	if len(transcript) > 0 {
+		t := transcript[0]
+		if t.Role == roleSpirit && t.Content != llm.ExhaustedLine {
+			if s := firstSentence(t.Content); s != "" {
+				return strings.ReplaceAll(s, `"`, "'")
+			}
 		}
 	}
 	if s, ok := lastWordsFallback[cause]; ok {
