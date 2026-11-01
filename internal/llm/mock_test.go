@@ -111,17 +111,149 @@ func TestMockStreamPicksEvidenceInOrder(t *testing.T) {
 	req := ChatRequest{Messages: userMsg("hi"), Cause: autopsy.CauseOOMKilled, Evidence: testEvidence()}
 	text := mockText(req)
 
-	// Status first, then the FATAL log line, then the event. The spec item is not cited.
-	for _, want := range []string{"[E1]", "[E3]", "[E4]"} {
+	// OOM: status, then the limits spec, then the FATAL log line. The cap of 3
+	// drops the Warning event.
+	for _, want := range []string{"[E1]", "[E2]", "[E3]"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("missing %s in %q", want, text)
 		}
 	}
-	if strings.Contains(text, "[E2]") {
-		t.Errorf("spec item should not be cited: %q", text)
+	if strings.Contains(text, "[E4]") {
+		t.Errorf("event should be cut by the citation cap: %q", text)
 	}
 	if i1, i3 := strings.Index(text, "[E1]"), strings.Index(text, "[E3]"); i1 > i3 {
 		t.Errorf("status should come before log: %q", text)
+	}
+}
+
+func ids(items []autopsy.Evidence) []string {
+	out := make([]string, 0, len(items))
+	for _, e := range items {
+		out = append(out, e.ID)
+	}
+	return out
+}
+
+func TestPickEvidenceByCause(t *testing.T) {
+	ev := []autopsy.Evidence{
+		{ID: "E1", Kind: "event", Text: "event Warning BackOff: Back-off pulling image"},
+		{ID: "E2", Kind: "spec", Text: "container app image: busybox:nonexist"},
+		{ID: "E3", Kind: "status", Text: "container app state: waiting reason=ImagePullBackOff; restarts: 0; lastState: none"},
+		{ID: "E4", Kind: "log", Text: "container app current log: error: something"},
+		{ID: "E5", Kind: "spec", Text: "container app limits: memory=64Mi; requests: none"},
+	}
+	tests := []struct {
+		name  string
+		cause autopsy.CauseOfDeath
+		want  []string
+	}{
+		// Logs are not part of the ImagePull passes, so E4 is skipped.
+		{"ImagePull status, image, warning", autopsy.CauseImagePullBackOff, []string{"E3", "E2", "E1"}},
+		// Limits come before logs and events for OOM.
+		{"OOM status, limits, logs", autopsy.CauseOOMKilled, []string{"E3", "E5", "E4"}},
+		// Generic causes use status, important logs, then warnings. E4 contains
+		// "error", so it is an important log and comes before the warning.
+		{"Error status, log, warning", autopsy.CauseError, []string{"E3", "E4", "E1"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ids(pickEvidence(tt.cause, ev))
+			if strings.Join(got, ",") != strings.Join(tt.want, ",") {
+				t.Errorf("picked %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestPickEvidenceNeverCitesNormalEvents(t *testing.T) {
+	ev := []autopsy.Evidence{
+		{ID: "E1", Kind: "event", Text: "event Normal Scheduled: Successfully assigned seance-demo/pod to node"},
+		{ID: "E2", Kind: "event", Text: "event Normal Pulled: Container image already present"},
+	}
+	for _, cause := range []autopsy.CauseOfDeath{autopsy.CauseImagePullBackOff, autopsy.CauseOOMKilled, autopsy.CauseError} {
+		if got := pickEvidence(cause, ev); len(got) != 0 {
+			t.Errorf("%s: picked %v, want none", cause, ids(got))
+		}
+	}
+}
+
+func TestPickEvidenceSkipsNoLimits(t *testing.T) {
+	ev := []autopsy.Evidence{
+		{ID: "E1", Kind: "status", Text: "container app state: terminated reason=OOMKilled; restarts: 1; lastState: none"},
+		{ID: "E2", Kind: "spec", Text: "container app limits: none; requests: none"},
+	}
+	if got := ids(pickEvidence(autopsy.CauseOOMKilled, ev)); strings.Join(got, ",") != "E1" {
+		t.Errorf("picked %v, want [E1]", got)
+	}
+}
+
+func TestPickEvidenceSkipsRepeatedLogLine(t *testing.T) {
+	ev := []autopsy.Evidence{
+		{ID: "E1", Kind: "status", Text: "container app state: terminated reason=Error; restarts: 1; lastState: none"},
+		{ID: "E2", Kind: "log", Text: "container app current log: FATAL: boom"},
+		{ID: "E3", Kind: "log", Text: "container app previous log: FATAL: boom"},
+		{ID: "E4", Kind: "log", Text: "container app previous log: FATAL: other"},
+	}
+	got := ids(pickEvidence(autopsy.CauseError, ev))
+	if strings.Join(got, ",") != "E1,E2,E4" {
+		t.Errorf("picked %v, want [E1 E2 E4]", got)
+	}
+}
+
+func TestFragmentStatus(t *testing.T) {
+	tests := []struct {
+		name string
+		text string
+		want string
+	}{
+		{
+			"lastState terminated onward",
+			"container app state: waiting reason=CrashLoopBackOff; restarts: 3; lastState: terminated reason=OOMKilled exitCode=137",
+			"lastState: terminated reason=OOMKilled exitCode=137",
+		},
+		{
+			"reason onward when no terminated lastState",
+			"container app state: waiting reason=ImagePullBackOff; restarts: 0; lastState: none",
+			"reason=ImagePullBackOff; restarts: 0; lastState: none",
+		},
+		{
+			"whole text when no marker",
+			"container app state: running; restarts: 0; lastState: none",
+			"container app state: running; restarts: 0; lastState: none",
+		},
+		{
+			"long reason is capped",
+			"container app state: waiting reason=" + strings.Repeat("x", 80),
+			"reason=" + strings.Repeat("x", 60-len("reason=")) + "…",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := fragment(autopsy.Evidence{Kind: "status", Text: tt.text})
+			if got != tt.want {
+				t.Errorf("fragment = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestFragmentLogStripsLabel(t *testing.T) {
+	tests := []struct {
+		name string
+		text string
+		want string
+	}{
+		{"current", "container app current log: panic: boom", "panic: boom"},
+		{"previous", "container app previous log: FATAL: out of memory", "FATAL: out of memory"},
+		{"no label kept", "plain line", "plain line"},
+		{"long line capped", "container app current log: " + strings.Repeat("y", 70), strings.Repeat("y", 60) + "…"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := fragment(autopsy.Evidence{Kind: "log", Text: tt.text}); got != tt.want {
+				t.Errorf("fragment = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }
 

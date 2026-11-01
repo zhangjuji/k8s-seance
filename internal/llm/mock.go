@@ -19,13 +19,16 @@ const (
 	// maxCitations caps how many evidence items one mock line cites.
 	maxCitations = 3
 	// maxQuoteRunes caps the length of each quoted evidence fragment.
-	maxQuoteRunes = 40
+	maxQuoteRunes = 60
 	// chunkRunes is the size of each streamed fragment.
 	chunkRunes = 4
 )
 
 // importantLog matches log lines worth citing: errors, fatal messages and OOM.
 var importantLog = regexp.MustCompile(`(?i)error|fatal|oom|panic|killed`)
+
+// logLabel matches the "container X current log: " or "container X previous log: " prefix.
+var logLabel = regexp.MustCompile(`^container \S+ (?:current|previous) log: `)
 
 // voiceLines holds the per-cause opening line of the ghost.
 var voiceLines = map[autopsy.CauseOfDeath]string{
@@ -86,7 +89,7 @@ func (m MockProvider) Stream(ctx context.Context, req ChatRequest, onDelta func(
 // mockText builds the full reply. It always cites evidence when any exists.
 func mockText(req ChatRequest) string {
 	followUp := userTurns(req.Messages) > 1
-	picked := pickEvidence(req.Evidence)
+	picked := pickEvidence(req.Cause, req.Evidence)
 
 	if len(picked) == 0 {
 		if followUp {
@@ -102,24 +105,60 @@ func mockText(req ChatRequest) string {
 	return voiceFor(req.Cause) + "证据在此：" + citation(picked) + "。"
 }
 
-// pickEvidence chooses up to maxCitations items in this order:
-// status, then log lines that mention errors or OOM, then events.
-// Each pass matches a different Kind, so an item is never picked twice.
-func pickEvidence(ev []autopsy.Evidence) []autopsy.Evidence {
+// pickEvidence chooses up to maxCitations items. Passes run in an order that
+// depends on the cause, and each pass stops once the limit is reached:
+//
+//	ImagePullBackOff: status, spec image, Warning events
+//	OOMKilled:        status, spec limits, important logs, Warning events
+//	other:            status, important logs, Warning events
+//
+// A log line whose text was already cited is skipped, so a previous log that
+// repeats the current log is not cited twice.
+func pickEvidence(cause autopsy.CauseOfDeath, ev []autopsy.Evidence) []autopsy.Evidence {
+	status := func(e autopsy.Evidence) bool { return e.Kind == "status" }
+	image := func(e autopsy.Evidence) bool {
+		return e.Kind == "spec" && strings.Contains(e.Text, " image: ")
+	}
+	limits := func(e autopsy.Evidence) bool {
+		return e.Kind == "spec" && strings.Contains(e.Text, " limits: ") && !strings.Contains(e.Text, "limits: none")
+	}
+	logs := func(e autopsy.Evidence) bool {
+		return e.Kind == "log" && importantLog.MatchString(logBody(e.Text))
+	}
+	warnings := func(e autopsy.Evidence) bool {
+		return e.Kind == "event" && strings.Contains(e.Text, " Warning ")
+	}
+
+	var passes []func(autopsy.Evidence) bool
+	switch cause {
+	case autopsy.CauseImagePullBackOff:
+		passes = []func(autopsy.Evidence) bool{status, image, warnings}
+	case autopsy.CauseOOMKilled:
+		passes = []func(autopsy.Evidence) bool{status, limits, logs, warnings}
+	default:
+		passes = []func(autopsy.Evidence) bool{status, logs, warnings}
+	}
+
 	var out []autopsy.Evidence
-	pass := func(match func(autopsy.Evidence) bool) {
+	seenLog := make(map[string]bool)
+	for _, match := range passes {
 		for _, e := range ev {
 			if len(out) == maxCitations {
-				return
+				return out
 			}
-			if match(e) {
-				out = append(out, e)
+			if !match(e) {
+				continue
 			}
+			if e.Kind == "log" {
+				body := logBody(e.Text)
+				if seenLog[body] {
+					continue
+				}
+				seenLog[body] = true
+			}
+			out = append(out, e)
 		}
 	}
-	pass(func(e autopsy.Evidence) bool { return e.Kind == "status" })
-	pass(func(e autopsy.Evidence) bool { return e.Kind == "log" && importantLog.MatchString(e.Text) })
-	pass(func(e autopsy.Evidence) bool { return e.Kind == "event" })
 	return out
 }
 
@@ -127,9 +166,33 @@ func pickEvidence(ev []autopsy.Evidence) []autopsy.Evidence {
 func citation(items []autopsy.Evidence) string {
 	parts := make([]string, 0, len(items))
 	for _, e := range items {
-		parts = append(parts, "「"+quote(e.Text)+"」["+e.ID+"]")
+		parts = append(parts, "「"+fragment(e)+"」["+e.ID+"]")
 	}
 	return strings.Join(parts, "，")
+}
+
+// fragment picks the telling part of one evidence item and caps it at maxQuoteRunes.
+// Status items quote from "lastState: terminated" or "reason=" onward. Log items
+// quote the log line without its label. Other items quote their whole text.
+func fragment(e autopsy.Evidence) string {
+	switch e.Kind {
+	case "status":
+		if i := strings.Index(e.Text, "lastState: terminated"); i >= 0 {
+			return quote(e.Text[i:])
+		}
+		if i := strings.Index(e.Text, "reason="); i >= 0 {
+			return quote(e.Text[i:])
+		}
+	case "log":
+		return quote(logBody(e.Text))
+	}
+	return quote(e.Text)
+}
+
+// logBody strips the "container X current log: " or "previous log: " label.
+// Text without the label is returned unchanged.
+func logBody(text string) string {
+	return logLabel.ReplaceAllString(text, "")
 }
 
 // quote shortens text to maxQuoteRunes runes, adding an ellipsis when it cuts.
