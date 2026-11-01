@@ -169,6 +169,12 @@ func (s *Session) Ask(ctx context.Context, question string, onDelta func(string)
 	return text, nil
 }
 
+// Provider returns the budget-wrapped provider of this session. Calls made through
+// it count against the séance budget, so the postmortem call uses the same limit.
+func (s *Session) Provider() llm.Provider {
+	return s.budget
+}
+
 // Transcript returns a copy of the turns so far, oldest first.
 func (s *Session) Transcript() []Turn {
 	s.mu.Lock()

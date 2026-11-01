@@ -49,7 +49,7 @@
     - _Requirements: 4.1, 4.3, 4.4_
 
 - [ ] 6. 故障复盘
-  - [ ] 6.1 复盘模板 `template.md` 与 `internal/postmortem/generator.go`：时间线/证据由代码填，摘要/根因/建议/行动项由 LLM 写
+  - [x] 6.1 复盘模板 `template.md` 与 `internal/postmortem/generator.go`：时间线/证据由代码填，摘要/根因/建议/行动项由 LLM 写
     - _Requirements: 5.1, 5.2, 5.4_
   - [ ] 6.2 预算耗尽或 LLM 失败时的纯模板兜底
     - _Requirements: 6.3_

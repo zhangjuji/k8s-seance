@@ -96,9 +96,7 @@ func mockText(req ChatRequest) string {
 	case PurposeChat:
 		return chatText(req)
 	case PurposePostmortem:
-		// TODO(6.1): the postmortem generator gets its own template text. Until
-		// then the mock returns the opening-style text.
-		return openingText(req)
+		return postmortemText(req)
 	}
 	// Purpose not set, so this is an older caller. More than one user message
 	// means a follow-up, which keeps the original short answer.
@@ -393,4 +391,133 @@ func inputRunes(req ChatRequest) int {
 		n += utf8.RuneCountInString(e.Text)
 	}
 	return n
+}
+
+// pmText holds the four postmortem blocks for one cause. Each field is filled in
+// by postmortemText, which adds the [E#] citations.
+type pmText struct {
+	summary, rootCause, remediation string
+	actionItems                     []string
+}
+
+// postmortemText returns the four delimited blocks the postmortem generator
+// parses: ### SUMMARY, ### ROOT_CAUSE, ### REMEDIATION and ### ACTION_ITEMS.
+// The tone is formal, with no first-person spirit voice. Citations come from the
+// same pickEvidence selection the other mock replies use.
+func postmortemText(req ChatRequest) string {
+	picked := pickEvidence(req.Cause, req.Evidence)
+	var t pmText
+	if len(picked) == 0 {
+		t = pmText{
+			summary:     "The recorded evidence does not show a single cause of failure.",
+			rootCause:   "No evidence was recorded, so the root cause cannot be confirmed.",
+			remediation: "- Run kubectl describe pod and kubectl logs --previous to collect more information.",
+			actionItems: []string{
+				"- [ ] Collect kubectl describe pod output and previous container logs for this Pod.",
+				"- [ ] Confirm the root cause once the missing data is collected.",
+				"- [ ] Keep event history long enough to review failures like this one.",
+			},
+		}
+	} else {
+		ref := func(i int) string {
+			if i < len(picked) {
+				return "[" + picked[i].ID + "]"
+			}
+			return ""
+		}
+		t = postmortemFor(req.Cause)(ref)
+	}
+	return "### SUMMARY\n" + t.summary + "\n\n" +
+		"### ROOT_CAUSE\n" + t.rootCause + "\n\n" +
+		"### REMEDIATION\n" + t.remediation + "\n\n" +
+		"### ACTION_ITEMS\n" + strings.Join(t.actionItems, "\n") + "\n"
+}
+
+// postmortemFor returns the cause-specific block builder. ref(i) is the citation
+// of the i-th picked evidence item, or "" when there is no such item.
+func postmortemFor(cause autopsy.CauseOfDeath) func(ref func(int) string) pmText {
+	switch cause {
+	case autopsy.CauseOOMKilled:
+		return func(ref func(int) string) pmText {
+			return pmText{
+				summary: "The container was terminated by the kernel out-of-memory killer (reason OOMKilled, exit code 137). " +
+					"The Pod restarted repeatedly and entered CrashLoopBackOff. " + ref(0) + ref(1),
+				rootCause: "Memory use of the container grew past its memory limit, so the kernel ended the process on each run. " +
+					"The memory limit is below the working set of the workload. " + ref(0) + ref(1),
+				remediation: "- Raise the memory limit above the observed peak usage, and set the memory request close to typical usage.\n" +
+					"- Find what keeps memory growing: caches, unbounded queues or leaks. Profile the workload under load.\n" +
+					"- After the change, check the container logs and events for new OOMKilled exits.",
+				actionItems: []string{
+					"- [ ] Raise the memory limit of the container above its observed peak usage. " + ref(1),
+					"- [ ] Profile the workload under load and identify the allocation that keeps growing.",
+					"- [ ] Add an alert on container memory usage near the limit, so the next OOM is seen before the restart.",
+				},
+			}
+		}
+	case autopsy.CauseCrashLoopBackOff, autopsy.CauseError:
+		return func(ref func(int) string) pmText {
+			return pmText{
+				summary: "The container process exited with a non-zero exit code on each start. " +
+					"The kubelet restarted it with increasing back-off, so the Pod is in CrashLoopBackOff. " + ref(0) + ref(1),
+				rootCause: "The container process fails during startup. " +
+					"The failure is recorded in the container log, so the startup command, arguments or configuration is the likely cause. " + ref(1),
+				remediation: "- Read the previous container log (kubectl logs --previous) for the first error line.\n" +
+					"- Correct the startup command, entrypoint arguments or config file path.\n" +
+					"- Run the same image with the same command outside the cluster to confirm that it starts and stays up.",
+				actionItems: []string{
+					"- [ ] Correct the startup command or config path named in the previous container log. " + ref(1),
+					"- [ ] Confirm that the config file or secret the process needs is mounted at the expected path.",
+					"- [ ] Check the exit code and the previous log before each restart is retried.",
+				},
+			}
+		}
+	case autopsy.CauseImagePullBackOff:
+		return func(ref func(int) string) pmText {
+			return pmText{
+				summary: "The container image could not be pulled, so the container never started and the Pod is in ImagePullBackOff. " +
+					ref(0) + ref(1),
+				rootCause: "The image reference does not resolve to a pullable image. " +
+					"The image name, the tag or the registry access rights are wrong. " + ref(1) + ref(2),
+				remediation: "- Confirm that the image name and tag exist in the registry.\n" +
+					"- Check the registry address and access rights, and set imagePullSecrets for a private registry.\n" +
+					"- Pull the image by hand on the node to confirm that the reference resolves.",
+				actionItems: []string{
+					"- [ ] Correct the image name or tag in the workload spec. " + ref(1),
+					"- [ ] Confirm the registry credentials referenced by imagePullSecrets of the Pod.",
+					"- [ ] Pin the image to a tag that exists in the registry, not a misspelled or moving tag.",
+				},
+			}
+		}
+	case autopsy.CauseProbeFailure:
+		return func(ref func(int) string) pmText {
+			return pmText{
+				summary: "The kubelet restarted the container after failed probes. " + ref(0) + ref(1),
+				rootCause: "The probe did not get a timely success response from the container. " +
+					"The probe path, port or timing is wrong, or the application starts more slowly than the probe allows. " + ref(1),
+				remediation: "- Check that the probe path and port respond from inside the container.\n" +
+					"- Raise initialDelaySeconds or timeoutSeconds to match the measured start-up time.\n" +
+					"- Confirm that the probe is needed, because a failing probe restarts an application that may be healthy.",
+				actionItems: []string{
+					"- [ ] Verify that the probe path and port return a success code. " + ref(1),
+					"- [ ] Tune initialDelaySeconds and timeoutSeconds from the measured start-up time.",
+					"- [ ] Review the failure threshold of the probe.",
+				},
+			}
+		}
+	default:
+		return func(ref func(int) string) pmText {
+			return pmText{
+				summary: "The recorded evidence does not establish a single cause of failure. " + ref(0) + ref(1),
+				rootCause: "The evidence is incomplete, so the root cause cannot be confirmed from the recorded data. " +
+					ref(1),
+				remediation: "- Run kubectl describe pod and kubectl logs --previous to collect more information.\n" +
+					"- Compare the events and the container states with the time of the failure.",
+				actionItems: []string{
+					"- [ ] Collect kubectl describe pod output and previous container logs for this Pod. " + ref(0),
+					"- [ ] Confirm the root cause once the missing data is collected.",
+					"- [ ] Keep event history long enough to review failures like this one.",
+				},
+			}
+		}
+	}
 }

@@ -491,16 +491,33 @@ func TestMockChatUsesLanguageOfLastQuestion(t *testing.T) {
 	}
 }
 
-func TestMockPostmortemPurposeUsesOpeningText(t *testing.T) {
-	req := ChatRequest{
-		Messages:  userMsg("summarise"),
-		Cause:     autopsy.CauseOOMKilled,
-		Evidence:  testEvidence(),
-		Purpose:   PurposePostmortem,
-		DeathTime: "2026-10-31 20:15:03 UTC",
+func TestMockPostmortemPurposeHasFourBlocks(t *testing.T) {
+	causes := []autopsy.CauseOfDeath{
+		autopsy.CauseOOMKilled, autopsy.CauseCrashLoopBackOff, autopsy.CauseImagePullBackOff,
+		autopsy.CauseError, autopsy.CauseProbeFailure, autopsy.CauseUnknown,
 	}
-	want := ChatRequest{Messages: req.Messages, Cause: req.Cause, Evidence: req.Evidence, Purpose: PurposeOpening, DeathTime: req.DeathTime}
-	if got, exp := mockText(req), mockText(want); got != exp {
-		t.Errorf("postmortem text %q, want opening text %q", got, exp)
+	for _, c := range causes {
+		req := ChatRequest{
+			Messages:  userMsg("write the postmortem"),
+			Cause:     c,
+			Evidence:  testEvidence(),
+			Purpose:   PurposePostmortem,
+			DeathTime: "2026-10-31 20:15:03 UTC",
+		}
+		text := mockText(req)
+		for _, h := range []string{"### SUMMARY\n", "### ROOT_CAUSE\n", "### REMEDIATION\n", "### ACTION_ITEMS\n"} {
+			if strings.Count(text, h) != 1 {
+				t.Errorf("%s: header %q appears %d times, want 1\n%s", c, h, strings.Count(text, h), text)
+			}
+		}
+		if !strings.Contains(text, "[E") {
+			t.Errorf("%s: no [E#] citation in %q", c, text)
+		}
+		if n := strings.Count(text, "- [ ] "); n != 3 {
+			t.Errorf("%s: %d action items, want 3", c, n)
+		}
+		if strings.Contains(text, "我") {
+			t.Errorf("%s: postmortem uses the spirit voice: %q", c, text)
+		}
 	}
 }
