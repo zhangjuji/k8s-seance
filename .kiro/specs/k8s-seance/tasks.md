@@ -22,10 +22,10 @@
   - [ ] 2.4 用真实 kind 集群录制 3 个 fixtures（`SEANCE_RECORD=1`），实现 `--fixtures` 加载（`fixtures/embed.go`）
     - _Requirements: 7.1, 7.3_
 
-- [ ] 3. 尸检：死因分类与证据
+- [x] 3. 尸检：死因分类与证据
   - [x] 3.1 实现 `internal/autopsy/classifier.go` 规则与表驱动测试（6 类 + 边界用例）
     - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7_
-  - [ ] 3.2 实现 `internal/autopsy/evidence.go`：编号、截断、去重、脱敏，及单元测试
+  - [x] 3.2 实现 `internal/autopsy/evidence.go`：编号、截断、去重、脱敏，及单元测试
     - _Requirements: 2.3, 2.4, 6.4_
 
 - [ ] 4. LLM 接入与成本控制
