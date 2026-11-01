@@ -102,10 +102,22 @@ type Input struct {
 	Transcript []spirit.Turn
 }
 
-// Result is a generated postmortem. Mode is ModeLLM or ModeTemplate.
+// Reason values for Result.Reason when Mode is ModeTemplate.
+const (
+	// ReasonBudgetExhausted means the séance budget had no calls left, so the LLM was not called.
+	ReasonBudgetExhausted = "budget_exhausted"
+	// ReasonLLMError means the LLM call failed, or no provider was given.
+	ReasonLLMError = "llm_error"
+	// ReasonMalformed means the LLM replied, but its four blocks could not be parsed.
+	ReasonMalformed = "malformed"
+)
+
+// Result is a generated postmortem. Mode is ModeLLM or ModeTemplate. Reason is
+// empty for ModeLLM and one of the Reason values for ModeTemplate.
 type Result struct {
 	Markdown string
 	Mode     string
+	Reason   string
 }
 
 // view is the value the template is executed with.
@@ -128,12 +140,19 @@ type view struct {
 }
 
 // Generate writes the postmortem for in. The timeline, evidence, impact and
-// last-words parts come from the snapshot. The LLM part is one call through p,
-// which must be the séance provider so the call counts against the budget.
-// It returns an error when the call fails or the output is malformed.
+// last-words parts come from the snapshot. The Summary, Root Cause, Remediation
+// and Action Items come from one LLM call through p, which must be the séance
+// provider so the call counts against the budget.
+//
+// If the budget is spent, the call fails, or the reply is malformed, the four
+// blocks come from the rule template instead, and Result.Mode is ModeTemplate
+// with the reason. The only error returned is a cancelled or expired ctx.
 func Generate(ctx context.Context, in Input, p llm.Provider) (Result, error) {
 	if in.Autopsy == nil {
 		return Result{}, errors.New("postmortem: nil autopsy")
+	}
+	if err := ctx.Err(); err != nil {
+		return Result{}, fmt.Errorf("postmortem: %w", err)
 	}
 	a := in.Autopsy
 
@@ -155,11 +174,15 @@ func Generate(ctx context.Context, in Input, p llm.Provider) (Result, error) {
 		Impact:      impactLines(a),
 	}
 
-	// TODO(6.2): on a budget or LLM failure, fall back to the pure template
-	// (per-cause pre-written text) instead of returning the error.
-	sec, err := askModel(ctx, in, p)
+	res := Result{Mode: ModeLLM}
+	sec, reason, err := askModel(ctx, in, p)
 	if err != nil {
 		return Result{}, err
+	}
+	if reason != "" {
+		sec = ruleSections(collectFacts(in))
+		res = Result{Mode: ModeTemplate, Reason: reason}
+		v.GeneratedBy = fmt.Sprintf("%s (%s)", ModeTemplate, reason)
 	}
 	v.Summary = sec.summary
 	v.RootCause = sec.rootCause
@@ -170,13 +193,25 @@ func Generate(ctx context.Context, in Input, p llm.Provider) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	return Result{Markdown: md, Mode: ModeLLM}, nil
+	res.Markdown = md
+	return res, nil
 }
 
-// askModel makes the one postmortem call and parses its four blocks.
-func askModel(ctx context.Context, in Input, p llm.Provider) (sections, error) {
+// exhaustion is the optional interface that *llm.Budget implements. Generate uses
+// it to skip the call when no calls are left.
+type exhaustion interface {
+	Exhausted() bool
+}
+
+// askModel makes the one postmortem call and parses its four blocks. A non-empty
+// reason means the caller should use the rule template. The only error returned
+// is a cancelled ctx.
+func askModel(ctx context.Context, in Input, p llm.Provider) (sections, string, error) {
 	if p == nil {
-		return sections{}, errors.New("postmortem: nil provider")
+		return sections{}, ReasonLLMError, nil
+	}
+	if ex, ok := p.(exhaustion); ok && ex.Exhausted() {
+		return sections{}, ReasonBudgetExhausted, nil
 	}
 	a := in.Autopsy
 	req := llm.ChatRequest{
@@ -199,9 +234,19 @@ func askModel(ctx context.Context, in Input, p llm.Provider) (sections, error) {
 		return nil
 	})
 	if err != nil {
-		return sections{}, fmt.Errorf("postmortem: llm call: %w", err)
+		if cerr := ctx.Err(); cerr != nil {
+			return sections{}, "", fmt.Errorf("postmortem: llm call: %w", cerr)
+		}
+		if errors.Is(err, llm.ErrBudgetExhausted) {
+			return sections{}, ReasonBudgetExhausted, nil
+		}
+		return sections{}, ReasonLLMError, nil
 	}
-	return parseSections(sb.String())
+	sec, perr := parseSections(sb.String())
+	if perr != nil {
+		return sections{}, ReasonMalformed, nil
+	}
+	return sec, "", nil
 }
 
 // sections holds the four blocks written by the model.

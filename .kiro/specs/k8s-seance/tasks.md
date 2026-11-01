@@ -48,10 +48,10 @@
   - [x] 5.3 提示词快照测试（replay 模式，3 个 fixtures，golden 文件）
     - _Requirements: 4.1, 4.3, 4.4_
 
-- [ ] 6. 故障复盘
+- [x] 6. 故障复盘
   - [x] 6.1 复盘模板 `template.md` 与 `internal/postmortem/generator.go`：时间线/证据由代码填，摘要/根因/建议/行动项由 LLM 写
     - _Requirements: 5.1, 5.2, 5.4_
-  - [ ] 6.2 预算耗尽或 LLM 失败时的纯模板兜底
+  - [x] 6.2 预算耗尽或 LLM 失败时的纯模板兜底
     - _Requirements: 6.3_
 
 - [ ] 7. Web 界面（`internal/web`：net/http + html/template + htmx）
