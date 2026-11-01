@@ -7,7 +7,7 @@
     - _Requirements: 6.1_
     - [x] repo skeleton, go.mod, LICENSE, README skeleton (done by Kiro)
     - [ ] Devpost Didit identity verification (human: juji)
-  - [ ] 1.2 编写 `demo/kind-config.yaml`、`oom.yaml`、`crashloop.yaml`、`imagepull.yaml` 和 `kill-them-all.sh`（含 `--cleanup`）
+  - [x] 1.2 编写 `demo/kind-config.yaml`、`oom.yaml`、`crashloop.yaml`、`imagepull.yaml` 和 `kill-them-all.sh`（含 `--cleanup`）
     - _Requirements: 8.1, 8.2, 8.3_
   - [ ] 1.3 编写 `demo/rbac-readonly.yaml`
     - _Requirements: 8.4, 2.2_

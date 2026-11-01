@@ -1,0 +1,7 @@
+# kind cluster for K8s Séance demos.
+# Cluster name "seance" is set on the command line (kind takes it via --name):
+#   kind create cluster --name seance --config demo/kind-config.yaml
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+  - role: control-plane

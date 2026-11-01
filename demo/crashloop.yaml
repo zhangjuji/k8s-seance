@@ -1,0 +1,34 @@
+# Dies in a CrashLoopBackOff: the app exits 1 right after printing a missing-config error.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: restless-spirit
+  namespace: seance-demo
+  labels:
+    app.kubernetes.io/name: restless-spirit
+    app.kubernetes.io/part-of: k8s-seance
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: restless-spirit
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: restless-spirit
+        app.kubernetes.io/part-of: k8s-seance
+    spec:
+      containers:
+        - name: app
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - "echo starting restless-spirit; echo FATAL: config /etc/app/config.yaml not found; exit 1"
+          resources:
+            requests:
+              memory: "16Mi"
+              cpu: "10m"
+            limits:
+              memory: "32Mi"
+              cpu: "100m"
