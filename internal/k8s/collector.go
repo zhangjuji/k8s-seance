@@ -12,6 +12,7 @@ import (
 
 	"github.com/zhangjuji/k8s-seance/internal/autopsy"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/kubernetes"
@@ -60,22 +61,105 @@ func ListSpirits(ctx context.Context, cs kubernetes.Interface, namespace string)
 		namespace = defaultNamespace
 	}
 
+	pods, err := listSpiritPods(ctx, cs, namespace)
+	if err != nil {
+		return nil, err
+	}
+
+	summaries := make([]autopsy.SpiritSummary, 0, len(pods))
+	for _, pod := range pods {
+		summaries = append(summaries, summarize(pod))
+	}
+	// Cause is left empty here. The list has no Events, so callers that need a cause
+	// use ListSpiritAutopsies, or run CollectAutopsy and autopsy.Classify on the Pods they pick.
+	return summaries, nil
+}
+
+// SpiritListing is one spirit list row together with the list-only autopsy its cause
+// is classified from.
+type SpiritListing struct {
+	Summary autopsy.SpiritSummary
+	Autopsy *autopsy.PodAutopsy
+}
+
+// ListSpiritAutopsies returns one SpiritListing per spirit Pod in namespace. It makes
+// exactly one Pods list and one namespace-wide Events list, whatever the Pod count.
+// It makes no Get and no log calls, so every autopsy has nil log tails.
+//
+// autopsy.Classify never reads log tails, so the cause matches CollectAutopsy with the
+// same inputs. Two Event rules differ from CollectAutopsy:
+//   - Events are matched by involvedObject.name and, when both sides carry a UID, by UID.
+//     CollectAutopsy matches by name only, so a Pod that reuses the name of a deleted Pod
+//     (for example a StatefulSet Pod) sees the old Pod's events there but not here.
+//   - The Events list filters on involvedObject.kind=Pod. CollectAutopsy filters only on
+//     the name, so a non-Pod object with the same name is excluded here.
+//
+// If the Events list is Forbidden, autopsies are built without events and the call
+// succeeds. Other Events errors are returned.
+func ListSpiritAutopsies(ctx context.Context, cs kubernetes.Interface, namespace string) ([]SpiritListing, error) {
+	if namespace == "" {
+		namespace = defaultNamespace
+	}
+
+	pods, err := listSpiritPods(ctx, cs, namespace)
+	if err != nil {
+		return nil, err
+	}
+
+	events, err := cs.CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
+		FieldSelector: fields.OneTermEqualSelector("involvedObject.kind", "Pod").String(),
+	})
+	var items []corev1.Event
+	switch {
+	case apierrors.IsForbidden(err):
+		// No Events: the autopsies carry only what the Pod objects show.
+	case err != nil:
+		return nil, fmt.Errorf("list events in namespace %q: %w", namespace, err)
+	default:
+		items = events.Items
+	}
+
+	out := make([]SpiritListing, 0, len(pods))
+	for _, pod := range pods {
+		out = append(out, SpiritListing{
+			Summary: summarize(pod),
+			Autopsy: buildAutopsy(ctx, cs, pod, eventsFor(pod, items), false),
+		})
+	}
+	return out, nil
+}
+
+// listSpiritPods lists the Pods in namespace with one list call and keeps the spirits.
+func listSpiritPods(ctx context.Context, cs kubernetes.Interface, namespace string) ([]*corev1.Pod, error) {
 	pods, err := cs.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list pods in namespace %q: %w", namespace, err)
 	}
 
-	summaries := make([]autopsy.SpiritSummary, 0)
+	spirits := make([]*corev1.Pod, 0)
 	for i := range pods.Items {
 		pod := &pods.Items[i]
-		if !IsSpirit(pod) {
+		if IsSpirit(pod) {
+			spirits = append(spirits, pod)
+		}
+	}
+	return spirits, nil
+}
+
+// eventsFor returns the events about pod from a namespace-wide list. The name must match.
+// When the event and the Pod both carry a UID, the UIDs must match as well.
+func eventsFor(pod *corev1.Pod, items []corev1.Event) []corev1.Event {
+	var out []corev1.Event
+	for _, e := range items {
+		if e.InvolvedObject.Name != pod.Name {
 			continue
 		}
-		summaries = append(summaries, summarize(pod))
+		if e.InvolvedObject.UID != "" && pod.UID != "" && e.InvolvedObject.UID != pod.UID {
+			continue
+		}
+		out = append(out, e)
 	}
-	// Cause is left empty here. The list has no Events, so callers run CollectAutopsy
-	// and autopsy.Classify on the Pods they pick.
-	return summaries, nil
+	return out
 }
 
 // allContainerStatuses returns init container statuses followed by regular ones.
@@ -140,6 +224,13 @@ func CollectAutopsy(ctx context.Context, cs kubernetes.Interface, namespace, pod
 		return nil, fmt.Errorf("list events for pod %s/%s: %w", namespace, pod, err)
 	}
 
+	return buildAutopsy(ctx, cs, p, events.Items, true), nil
+}
+
+// buildAutopsy converts a Pod and its Events into a PodAutopsy. CollectAutopsy and
+// ListSpiritAutopsies share it, so container fields match between the two.
+// Log tails are read only when withLogs is true. Otherwise they stay nil.
+func buildAutopsy(ctx context.Context, cs kubernetes.Interface, p *corev1.Pod, events []corev1.Event, withLogs bool) *autopsy.PodAutopsy {
 	a := &autopsy.PodAutopsy{
 		Namespace:   p.Namespace,
 		Name:        p.Name,
@@ -147,7 +238,7 @@ func CollectAutopsy(ctx context.Context, cs kubernetes.Interface, namespace, pod
 		CreatedAt:   p.CreationTimestamp.Time,
 		Phase:       string(p.Status.Phase),
 		NodeName:    p.Spec.NodeName,
-		Events:      convertEvents(events.Items),
+		Events:      convertEvents(events),
 		CollectedAt: time.Now(),
 		Source:      "cluster",
 	}
@@ -163,20 +254,23 @@ func CollectAutopsy(ctx context.Context, cs kubernetes.Interface, namespace, pod
 
 	for _, c := range p.Spec.Containers {
 		st := statuses[c.Name] // zero value if the status is missing
-		a.Containers = append(a.Containers, autopsy.ContainerAutopsy{
-			Name:            c.Name,
-			Image:           c.Image,
-			RestartCount:    st.RestartCount,
-			State:           convertState(st.State),
-			LastState:       convertLastState(st.LastTerminationState),
-			Limits:          resourceMap(c.Resources.Limits),
-			Requests:        resourceMap(c.Resources.Requests),
-			LogTail:         fetchLogTail(ctx, cs, namespace, pod, c.Name, false),
-			PreviousLogTail: fetchLogTail(ctx, cs, namespace, pod, c.Name, true),
-		})
+		ct := autopsy.ContainerAutopsy{
+			Name:         c.Name,
+			Image:        c.Image,
+			RestartCount: st.RestartCount,
+			State:        convertState(st.State),
+			LastState:    convertLastState(st.LastTerminationState),
+			Limits:       resourceMap(c.Resources.Limits),
+			Requests:     resourceMap(c.Resources.Requests),
+		}
+		if withLogs {
+			ct.LogTail = fetchLogTail(ctx, cs, p.Namespace, p.Name, c.Name, false)
+			ct.PreviousLogTail = fetchLogTail(ctx, cs, p.Namespace, p.Name, c.Name, true)
+		}
+		a.Containers = append(a.Containers, ct)
 	}
 
-	return a, nil
+	return a
 }
 
 // fetchLogTail returns the last logTailLines lines of a container log.

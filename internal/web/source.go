@@ -38,25 +38,20 @@ type ClusterSource struct {
 // Name implements Source.
 func (ClusterSource) Name() string { return "cluster" }
 
-// List implements Source. It lists the spirit Pods, then runs CollectAutopsy on each
-// one to get Cause, because the list call carries no Events. This makes one Get, one
-// Events list and up to two log reads per container for each spirit. A Pod deleted
-// after the list call is left out.
+// List implements Source. It makes one Pods list and one namespace-wide Events list,
+// whatever the number of spirits. Cause comes from autopsy.Classify on the list-only
+// autopsies, so no Get or log read is made here. Log tails are not read, and
+// Classify does not use them. A Pod does not appear in the list if it is gone from the
+// cluster by the time the list is read.
 func (c ClusterSource) List(ctx context.Context, namespace string) ([]autopsy.SpiritSummary, error) {
-	summaries, err := k8s.ListSpirits(ctx, c.Client, namespace)
+	listings, err := k8s.ListSpiritAutopsies(ctx, c.Client, namespace)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]autopsy.SpiritSummary, 0, len(summaries))
-	for _, s := range summaries {
-		a, err := c.Autopsy(ctx, s.Namespace, s.Name)
-		if errors.Is(err, ErrNotFound) {
-			continue
-		}
-		if err != nil {
-			return nil, err
-		}
-		s.Cause = autopsy.Classify(a).Cause
+	out := make([]autopsy.SpiritSummary, 0, len(listings))
+	for _, l := range listings {
+		s := l.Summary
+		s.Cause = autopsy.Classify(l.Autopsy).Cause
 		out = append(out, s)
 	}
 	return out, nil
