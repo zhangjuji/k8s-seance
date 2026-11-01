@@ -18,3 +18,21 @@ th, td { text-align: left; padding: 0.4rem 0.6rem; border-bottom: 1px solid #2a2
 .badge-imagepullbackoff { background: #1e3a5a; }
 .badge-probefailure { background: #4a4a1e; }
 .badge-error, .badge-unknown { background: #3a3a46; }
+
+/* Séance page layout (task 7.2). The dark theme and candle effects come in task 7.4. */
+.seance-head { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: baseline; margin-bottom: 1rem; }
+.seance-head h1 { font-size: 1.25rem; margin: 0; }
+.seance-body { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 1.25rem; }
+.log { display: flex; flex-direction: column; gap: 0.5rem; min-height: 6rem; }
+.turn { padding: 0.5rem 0.75rem; border-left: 3px solid #3a3a46; background: #1d1d25; }
+.turn-user { border-left-color: #6a6a7a; }
+.turn-spirit { border-left-color: #b9a6ff; }
+.turn-advice { background: #20261d; border-left-color: #8fbf6a; }
+.turn .who { display: block; font-size: 0.8rem; color: #9a9aa6; }
+.turn .text { margin: 0.25rem 0 0; white-space: pre-wrap; }
+.ev-link { color: #b9a6ff; }
+.quick, .ask { display: flex; gap: 0.5rem; margin-top: 0.75rem; }
+.ask input { flex: 1; }
+.typing[hidden] { display: none; }
+.evidence details { margin-bottom: 0.5rem; }
+.evidence pre { overflow-x: auto; white-space: pre-wrap; background: #101016; padding: 0.5rem; }

@@ -1,0 +1,98 @@
+{{define "content"}}<section id="page" class="seance" hx-ext="sse" sse-connect="{{.StreamURL}}">
+  <header class="seance-head">
+    <h1 class="pod-name">{{.Pod}}</h1>
+    <span class="badge {{.BadgeClass}}">{{.Cause}}</span>
+    <span class="died">死亡时间（UTC）：{{.Died}}</span>
+    <span id="meter" class="meter" data-used="{{.Used}}" data-left="{{.Left}}">仪式之力：已用 {{.Used}} / {{.Total}} 次</span>
+  </header>
+
+  <div class="seance-body">
+    <div class="chat">
+      <div id="log" class="log">{{range .Turns}}{{.}}{{end}}</div>
+      <div id="typing" class="turn turn-spirit typing" hidden><span class="who">亡灵</span><p class="text" id="typing-text"></p></div>
+      <div id="feed" hidden hx-trigger="sse:delta, sse:turn, sse:exhausted"></div>
+
+      <div class="quick">
+        <button type="button" hx-post="{{.MessagesURL}}" hx-vals='{"text":"你是怎么死的？"}' hx-target="#log" hx-swap="beforeend"{{if .Exhausted}} disabled{{end}}>你是怎么死的？</button>
+        <button type="button" hx-post="{{.MessagesURL}}" hx-vals='{"text":"怎么修复？"}' hx-target="#log" hx-swap="beforeend"{{if .Exhausted}} disabled{{end}}>怎么修复？</button>
+      </div>
+
+      <form id="ask" class="ask" method="post" action="{{.MessagesURL}}"
+            hx-post="{{.MessagesURL}}" hx-target="#log" hx-swap="beforeend"
+            hx-on::after-request="if(event.detail.successful) this.reset()">
+        <input name="text" type="text" maxlength="1000" autocomplete="off" placeholder="问亡灵一个问题"{{if .Exhausted}} disabled{{end}} required>
+        <button type="submit"{{if .Exhausted}} disabled{{end}}>问</button>
+      </form>
+
+      <button type="button" class="finish" disabled title="复盘面板在任务 7.3 实现">结束降灵会，生成复盘</button>
+    </div>
+
+    <aside class="evidence">
+      <h2>证据</h2>
+      {{range .Evidence}}<details id="ev-{{.ID}}"><summary>[{{.ID}}] {{.Kind}}</summary><pre>{{.Text}}</pre></details>
+      {{end}}
+    </aside>
+  </div>
+</section>
+<script src="/static/sse.js" defer></script>
+<script>
+(function () {
+  var log = document.getElementById('log');
+  var meter = document.getElementById('meter');
+  var typing = document.getElementById('typing');
+  var typingText = document.getElementById('typing-text');
+
+  // tidy removes repeated turns (the htmx reply and the stream can both carry one),
+  // then updates the budget meter from the newest turn.
+  function tidy() {
+    var items = log.querySelectorAll('[data-turn]');
+    var seen = {}, newest = null, newestIndex = -1;
+    for (var i = 0; i < items.length; i++) {
+      var key = items[i].getAttribute('data-turn');
+      if (seen[key]) { items[i].remove(); continue; }
+      seen[key] = true;
+      if (Number(key) > newestIndex) { newestIndex = Number(key); newest = items[i]; }
+    }
+    if (!newest) { return; }
+    var used = Number(newest.getAttribute('data-used'));
+    var left = Number(newest.getAttribute('data-left'));
+    meter.textContent = '仪式之力：已用 ' + used + ' / ' + (used + left) + ' 次';
+    if (left <= 0) { disableAsk(); }
+  }
+
+  function disableAsk() {
+    var controls = document.querySelectorAll('#page .quick button, #ask input, #ask button');
+    for (var i = 0; i < controls.length; i++) { controls[i].disabled = true; }
+  }
+
+  document.body.addEventListener('htmx:afterSettle', tidy);
+  document.body.addEventListener('htmx:sseMessage', tidy);
+  // The stream sends each finished turn as JSON. Its html field is the fragment to show.
+  document.body.addEventListener('sse:turn', function (e) {
+    var t = JSON.parse(e.detail.data);
+    log.insertAdjacentHTML('beforeend', t.html);
+    if (t.role === 'spirit') {
+      typing.hidden = true;
+      typingText.textContent = '';
+    }
+    tidy();
+  });
+  document.body.addEventListener('sse:delta', function (e) {
+    var d = JSON.parse(e.detail.data);
+    typing.hidden = false;
+    typingText.textContent += d.text;
+  });
+  document.body.addEventListener('sse:exhausted', disableAsk);
+
+  // A link to [E#] opens the evidence card it names.
+  document.body.addEventListener('click', function (e) {
+    var a = e.target.closest ? e.target.closest('a.ev-link') : null;
+    if (!a) { return; }
+    var card = document.getElementById(a.getAttribute('href').slice(1));
+    if (card) { card.open = true; }
+  });
+
+  tidy();
+})();
+</script>
+{{end}}

@@ -71,9 +71,13 @@ type Options struct {
 
 // Server holds the routes and the parsed page templates.
 type Server struct {
-	opts  Options
-	pages *template.Template
-	mux   *http.ServeMux
+	opts Options
+	// pages renders the list page. seancePages renders the séance page and its turn fragments.
+	pages       *template.Template
+	seancePages *template.Template
+	mux         *http.ServeMux
+	seances     *seanceStore
+	cache       *llm.OpeningCache
 }
 
 // New validates opts, parses the embedded templates and registers the routes.
@@ -90,17 +94,31 @@ func New(opts Options) (*Server, error) {
 	if opts.Logger == nil {
 		opts.Logger = log.New(os.Stderr, "seance: ", log.LstdFlags)
 	}
+	if opts.Provider == nil {
+		opts.Provider = llm.MockProvider{}
+	}
 
-	pages, err := template.ParseFS(templateFS, "templates/*.html")
+	// The two pages both define "content", so each one gets its own template set.
+	pages, err := template.ParseFS(templateFS, "templates/layout.html", "templates/spirits.html")
 	if err != nil {
 		return nil, fmt.Errorf("parse templates: %w", err)
+	}
+	seancePages, err := template.ParseFS(templateFS, "templates/layout.html", "templates/seance.html", "templates/turn.html")
+	if err != nil {
+		return nil, fmt.Errorf("parse séance templates: %w", err)
 	}
 	static, err := fs.Sub(staticFS, "static")
 	if err != nil {
 		return nil, fmt.Errorf("embed static files: %w", err)
 	}
 
-	s := &Server{opts: opts, pages: pages}
+	s := &Server{
+		opts:        opts,
+		pages:       pages,
+		seancePages: seancePages,
+		seances:     newSeanceStore(),
+		cache:       &llm.OpeningCache{},
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", s.handleRoot)
 	mux.HandleFunc("GET /spirits", s.handleSpiritsPage)
@@ -110,6 +128,7 @@ func New(opts Options) (*Server, error) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		fmt.Fprintln(w, "ok")
 	})
+	s.registerSeanceRoutes(mux)
 	s.mux = mux
 	return s, nil
 }
@@ -126,11 +145,16 @@ func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, target, http.StatusFound)
 }
 
-// source picks the Source for one request. FixturesOnly and src=fixtures select
-// the fixtures. Otherwise the cluster is used, and if it is nil the result is a
-// clusterDownError.
+// source picks the Source for one request from its src query parameter.
 func (s *Server) source(r *http.Request) (Source, error) {
-	switch r.URL.Query().Get("src") {
+	return s.sourceNamed(r.URL.Query().Get("src"))
+}
+
+// sourceNamed picks the Source for a src value: "", "cluster" or "fixtures".
+// FixturesOnly and src=fixtures select the fixtures. Otherwise the cluster is used,
+// and if it is nil the result is a clusterDownError.
+func (s *Server) sourceNamed(name string) (Source, error) {
+	switch name {
 	case fixturesSource:
 		return s.opts.Fixtures, nil
 	case "", clusterSource:
