@@ -1,0 +1,146 @@
+[
+  {
+    "title": "搭环境：Kiro CLI、Go 仓库骨架、完成 Didit 身份验证",
+    "dueDate": "2026-11-03",
+    "priority": 2,
+    "description": "做什么：安装/登录 Kiro CLI（开发默认用 `kiro-cli chat --model claude-haiku-5.5`）；新建公开 GitHub 仓库 k8s-seance（10/30 之后新建）；按 tasks.md 1.1 初始化 Go 模块（Go 1.23+）和目录骨架，加 MIT LICENSE；把 /workspace/k8s-seance/.kiro 放进仓库根目录；等 Devpost 发 Didit 身份验证邮件并完成验证（积分申请表已于 2026-11-01 提交）。\n验收：仓库公开、GitHub About 显示 MIT；.kiro/specs 与 steering 已提交且不在 .gitignore；Didit 验证已完成；`go run ./cmd/seance` 能起空页面。",
+    "team": "ZHA",
+    "assignee": "juji zhang",
+    "project": "K8s 降灵会"
+  },
+  {
+    "title": "演示集群：kind + 三种死法脚本",
+    "dueDate": "2026-11-05",
+    "priority": 2,
+    "description": "做什么：demo/kind-config.yaml、oom.yaml（memory-glutton）、crashloop.yaml（restless-spirit）、imagepull.yaml（lost-soul）、kill-them-all.sh（含 --cleanup）、rbac-readonly.yaml。对应 Req 8。\n验收：全新 kind 集群执行脚本后 2 分钟内三种状态都出现；--cleanup 只删 seance-demo 命名空间；RBAC 只有 pods、pods/log、events 的 get/list/watch。",
+    "team": "ZHA",
+    "assignee": "juji zhang",
+    "project": "K8s 降灵会"
+  },
+  {
+    "title": "取数据层：只读采集 PodAutopsy",
+    "dueDate": "2026-11-08",
+    "priority": 2,
+    "description": "做什么：internal/k8s/collector.go 用 client-go 实现 ListSpirits、CollectAutopsy（状态、退出码、reason、limits、镜像、Events、当前和 previous 日志尾部），只调用 CoreV1().Pods().List/Get、Pods().GetLogs、Events().List；只读守卫测试（go test 扫描源码）。对应 Req 1、2。\n验收：在 demo 集群上列出 3 个亡灵；无 previous 日志不报错；守卫测试能拦住 Create/Update/Patch/Delete/Evict 等写调用。",
+    "team": "ZHA",
+    "assignee": "juji zhang",
+    "project": "K8s 降灵会"
+  },
+  {
+    "title": "死因分类器与证据打包（脱敏、截断）",
+    "dueDate": "2026-11-10",
+    "priority": 2,
+    "description": "做什么：internal/autopsy/classifier.go（OOMKilled、ImagePullBackOff、CrashLoopBackOff、ProbeFailure、Error、Unknown）；internal/autopsy/evidence.go（E# 编号、截断 200 行、去重、脱敏）。对应 Req 3、2.3、2.4。\n验收：go test 用表驱动测试覆盖每种死因 + 边界（137 无 OOM reason、CrashLoop 且 lastState OOMKilled）；demo 集群 3/3 分类正确；含 token/password 的日志被替换为 [REDACTED]。",
+    "team": "ZHA",
+    "assignee": "juji zhang",
+    "project": "K8s 降灵会"
+  },
+  {
+    "title": "LLM 接入、成本上限、录制/回放",
+    "dueDate": "2026-11-12",
+    "priority": 2,
+    "description": "做什么：internal/llm 定义 Provider 接口，三种实现：HTTPProvider（net/http 实现 OpenAI 兼容流式客户端，stream=true）、MockProvider（按死因 + 证据拼固定台词、模拟流式）、ReplayProvider（录制与回放，找不到录音时退回 mock）。配置来自环境变量 SEANCE_LLM_BASE_URL/API_KEY/MODEL 或 ~/.k8s-seance/config.yaml（环境变量优先），不预设厂商；未配置时自动进入 mock。budget.go（每场 ≤6 次调用、单次输入 ≤6k token、输出 ≤400）；开场白缓存。对应 Req 6、7.2、7.3。\n验收：没有任何 key 时 mock 模式能流式出字并带 [E#] 引用；超限返回固定台词；配置任一 OpenAI 兼容接口后 HTTPProvider 能流式出字；SEANCE_RECORD=1 能录、--replay 不发网络请求。",
+    "team": "ZHA",
+    "assignee": "juji zhang",
+    "project": "K8s 降灵会"
+  },
+  {
+    "title": "巨基提供 LLM 接口地址和 key",
+    "dueDate": "2026-11-15",
+    "priority": 2,
+    "description": "做什么：巨基提供亡灵对话要用的 OpenAI 兼容接口地址（base URL）、API key 和模型名，写进本机环境变量或 ~/.k8s-seance/config.yaml（权限 0600，不提交到仓库）；用真实接口跑一遍 3 个亡灵，并用 SEANCE_RECORD=1 录下 fixtures/replay，供演示和评委试用。在此之前开发全部用 mock。\n验收：配置后 HTTPProvider 能对 3 个亡灵流式回答；单场调用次数和 token 在 budget 内；replay 录音已生成；key 没有出现在仓库或日志里。",
+    "team": "ZHA",
+    "assignee": "juji zhang",
+    "project": "K8s 降灵会"
+  },
+  {
+    "title": "亡灵人设与提示词",
+    "dueDate": "2026-11-15",
+    "priority": 2,
+    "description": "做什么：internal/spirit/prompts/persona.md（用 go:embed 打包）+ 每种死因的声线小抄；internal/spirit/persona.go、chat.go（séance 会话：开场白、追问、最近 4 轮历史、[E#] 引用）；提示词快照测试（go test golden 文件）。对应 Req 4。\n验收：3 个亡灵开场白都点出正确死因并引用至少 1 条证据；问证据外的问题回答「没有记录」；问修复给出对应建议；中英文跟随用户。",
+    "team": "ZHA",
+    "assignee": "juji zhang",
+    "project": "K8s 降灵会"
+  },
+  {
+    "title": "降灵会 Web 界面（列表、聊天、证据卡片）",
+    "dueDate": "2026-11-18",
+    "priority": 3,
+    "description": "做什么：internal/web/server.go（net/http 路由 + SSE）、templates/*.html（html/template）、static/（htmx 单个 js 文件与手写 CSS，用 go:embed 打包）。页面包括：亡灵列表页（死因徽章、命名空间切换、连接失败时进入样例模式的入口）；降灵会页（SSE 流式、[E#] 证据卡片展开）；暗色主题 + 烛光/雾气 CSS。对应 Req 1.2–1.4、4.2、4.3。\n验收：从列表点开任一亡灵到看到开场白不超过 3 次点击；证据卡片能展开原文；断开集群时界面有可读提示。",
+    "team": "ZHA",
+    "assignee": "juji zhang",
+    "project": "K8s 降灵会"
+  },
+  {
+    "title": "复盘生成（7 小节 Markdown）",
+    "dueDate": "2026-11-20",
+    "priority": 2,
+    "description": "做什么：internal/postmortem/template.md（go:embed）+ generator.go；时间线和证据由代码从 PodAutopsy 填，摘要/根因/影响/修复/行动项由 LLM 写；LLM 失败或预算耗尽时走纯模板；前端复制和下载 .md。对应 Req 5、6.3。\n验收：3 个亡灵都能生成含 7 小节的复盘；时间线用真实时间戳；断开 LLM 时仍能生成模板版；复制和下载可用。",
+    "team": "ZHA",
+    "assignee": "juji zhang",
+    "project": "K8s 降灵会"
+  },
+  {
+    "title": "离线样例模式（fixtures + replay）",
+    "dueDate": "2026-11-21",
+    "priority": 2,
+    "description": "做什么：用 demo 集群录 3 个亡灵的 fixtures 和完整的 LLM 回放（fixtures/embed.go 把 JSON 打进二进制）；`go run ./cmd/seance --fixtures --replay` 跑通。对应 Req 7。\n验收：拔网线、无集群、无 key 时完整跑通列表→对话→复盘；README 写明评委试用命令。",
+    "team": "ZHA",
+    "assignee": "juji zhang",
+    "project": "K8s 降灵会"
+  },
+  {
+    "title": "故障墓地页面（可选）",
+    "dueDate": "2026-11-24",
+    "priority": 4,
+    "description": "低优先级，前面任务延期就砍。做什么：internal/graveyard/store.go（~/.k8s-seance/graveyard.json）、/api/graveyard、墓碑网格页（Pod 名、生卒时间、死因、墓志铭），点开看复盘。对应 Req 9。\n验收：生成复盘后墓地新增一块墓碑，按死亡时间倒序，点开能看到复盘。",
+    "team": "ZHA",
+    "assignee": "juji zhang",
+    "project": "K8s 降灵会"
+  },
+  {
+    "title": "打磨与端到端验收",
+    "dueDate": "2026-11-27",
+    "priority": 3,
+    "description": "做什么：按 spec.md 第 7 节逐条验收；修 bug；调提示词语气；统计单场 LLM 调用和 token；可选加 Kiro hook（如保存 demo/*.yaml 时校验）。\n验收：第 7 节 1–8 条全部通过并在 issue 里贴结果；真实集群和样例模式各完整跑一遍演示脚本无卡顿。",
+    "team": "ZHA",
+    "assignee": "juji zhang",
+    "project": "K8s 降灵会"
+  },
+  {
+    "title": "整理公开仓库：/.kiro、LICENSE、README",
+    "dueDate": "2026-11-29",
+    "priority": 1,
+    "description": "做什么：确认仓库公开、根目录 /.kiro（specs、steering、hooks）未被 .gitignore、MIT LICENSE 在 About 区可见；README 写安装（go run ./cmd/seance 或编译单个二进制）、kind 演示、样例模式、只读 RBAC、成本说明、How we used Kiro；tasks.md 勾选进度同步。\n验收：用无痕浏览器打开仓库能看到 .kiro 和 License；按 README 在干净环境 10 分钟内跑起样例模式。",
+    "team": "ZHA",
+    "assignee": "juji zhang",
+    "project": "K8s 降灵会"
+  },
+  {
+    "title": "录演示视频并上传 YouTube（<3 分钟）",
+    "dueDate": "2026-12-01",
+    "priority": 1,
+    "description": "做什么：按 spec.md 第 6 节脚本录制（kind 制造三种死法 → 三个亡灵 → 复盘 → 墓地 → Kiro spec 画面），备一份样例模式素材；不用受版权保护的音乐；上传 YouTube 设为公开。\n验收：时长 ≤ 2:50；画面里能看到项目真实运行；公开链接未登录可播放。",
+    "team": "ZHA",
+    "assignee": "juji zhang",
+    "project": "K8s 降灵会"
+  },
+  {
+    "title": "博客 + #KiroweenHackathon26 社交帖",
+    "dueDate": "2026-12-02",
+    "priority": 3,
+    "description": "做什么：写一篇博客（发在第三方博客平台，写明是为 Kiroween 2026 而写，讲 Frankenstein 思路和怎么用 Kiro spec/steering 开发）；发一条以 #KiroweenHackathon26 开头的社交帖，写对 Kiro 最喜欢的一点并附视频链接。（规则里这两项是加分奖项，不是硬性要求。）\n验收：博客与帖子公开可访问，发布时间在提交期内，链接已存到提交草稿。",
+    "team": "ZHA",
+    "assignee": "juji zhang",
+    "project": "K8s 降灵会"
+  },
+  {
+    "title": "Devpost 提交",
+    "dueDate": "2026-12-03",
+    "priority": 1,
+    "description": "做什么：在 kiroween.devpost.com 填提交表：Frankenstein 赛道、项目描述、GitHub 仓库链接、YouTube 链接、How we used Kiro 说明、博客与社交帖链接。最晚 12/03 晚提交，留出余量（官方截止北京时间 12/05 06:00）。\n验收：Devpost 显示已提交；所有链接未登录可打开；提交后再检查一遍仓库 /.kiro 和 License。",
+    "team": "ZHA",
+    "assignee": "juji zhang",
+    "project": "K8s 降灵会"
+  }
+]
