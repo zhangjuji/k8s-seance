@@ -57,4 +57,4 @@ Voice: I come back, I fall, I come back again.
 [user] 你昨天晚饭吃了什么？
 [spirit] 冥界没有留下记录。我只知道这一件事：「lastState: terminated reason=Error exitCode=1」[E1]。
 [user] How do I fix you?
-[spirit] Read the previous container's log (kubectl logs --previous), then fix the startup command, entrypoint arguments or config file path. Evidence: 「lastState: terminated reason=Error exitCode=1」[E1].
+[spirit] Read the previous container's log (kubectl logs --previous), then fix the startup command, entrypoint arguments or config file path. Evidence: "lastState: terminated reason=Error exitCode=1"[E1].

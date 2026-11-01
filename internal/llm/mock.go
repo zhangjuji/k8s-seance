@@ -114,7 +114,7 @@ func openingText(req ChatRequest) string {
 	if len(picked) == 0 {
 		return voiceFor(req.Cause) + death + noRecord
 	}
-	return voiceFor(req.Cause) + death + "证据在此：" + citation(picked) + "。"
+	return voiceFor(req.Cause) + death + "证据在此：" + citation(picked, false) + "。"
 }
 
 // deathLine returns the time-of-death sentence, or "" when the time is unknown.
@@ -132,7 +132,7 @@ func legacyFollowUpText(req ChatRequest) string {
 	if len(picked) == 0 {
 		return noRecord
 	}
-	return followUpLine + citation(picked[:1]) + "。"
+	return followUpLine + citation(picked[:1], false) + "。"
 }
 
 // Keyword lists for chatText. Matching is substring based, on the lower-cased
@@ -191,9 +191,9 @@ func chatText(req ChatRequest) string {
 	case containsAny(lower, fixKeywords):
 		advice := adviceFor(req.Cause)
 		if english {
-			return advice.en + " Evidence: " + citation(picked[:1]) + "."
+			return advice.en + " Evidence: " + citation(picked[:1], true) + "."
 		}
-		return advice.zh + "依据：" + citation(picked[:1]) + "。"
+		return advice.zh + "依据：" + citation(picked[:1], false) + "。"
 	case containsAny(lower, causeKeywords):
 		return causeReply(req, picked, english, containsAny(lower, timeKeywords))
 	default:
@@ -204,7 +204,7 @@ func chatText(req ChatRequest) string {
 // causeReply restates the cause with up to two citations. It adds the time of
 // death when the question asks for it and the time is known.
 func causeReply(req ChatRequest, picked []autopsy.Evidence, english, askedWhen bool) string {
-	cite := citation(picked[:min(2, len(picked))])
+	cite := citation(picked[:min(2, len(picked))], english)
 	if english {
 		s := "My cause of death is " + string(req.Cause) + ". Evidence: " + cite + "."
 		if askedWhen && req.DeathTime != "" {
@@ -223,9 +223,9 @@ func causeReply(req ChatRequest, picked []autopsy.Evidence, english, askedWhen b
 // answer. It keeps the reply citing the cause evidence.
 func otherEvidence(picked []autopsy.Evidence, english bool) string {
 	if english {
-		return " The only thing I know: " + citation(picked[:1]) + "."
+		return " The only thing I know: " + citation(picked[:1], true) + "."
 	}
-	return "我只知道这一件事：" + citation(picked[:1]) + "。"
+	return "我只知道这一件事：" + citation(picked[:1], false) + "。"
 }
 
 // recordLine is the fixed "no record" answer in the given language.
@@ -322,13 +322,24 @@ func pickEvidence(cause autopsy.CauseOfDeath, ev []autopsy.Evidence) []autopsy.E
 	return out
 }
 
-// citation renders each item as 「fragment」[E#], joined by commas.
-func citation(items []autopsy.Evidence) string {
+// citation renders each item as 「fragment」[E#] joined by "，" in Chinese. English
+// replies use "fragment"[E#] joined by ", ", so no CJK punctuation appears.
+// Inner double quotes in an English fragment become single quotes, so the
+// straight quotes around the fragment stay unambiguous.
+func citation(items []autopsy.Evidence, english bool) string {
+	left, right, sep := "「", "」", "，"
+	if english {
+		left, right, sep = `"`, `"`, ", "
+	}
 	parts := make([]string, 0, len(items))
 	for _, e := range items {
-		parts = append(parts, "「"+fragment(e)+"」["+e.ID+"]")
+		frag := fragment(e)
+		if english {
+			frag = strings.ReplaceAll(frag, `"`, "'")
+		}
+		parts = append(parts, left+frag+right+"["+e.ID+"]")
 	}
-	return strings.Join(parts, "，")
+	return strings.Join(parts, sep)
 }
 
 // fragment picks the telling part of one evidence item and caps it at maxQuoteRunes.

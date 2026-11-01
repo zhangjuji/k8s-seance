@@ -3,6 +3,7 @@ package llm
 import (
 	"context"
 	"errors"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -470,6 +471,66 @@ func TestMockChatReplies(t *testing.T) {
 			}
 			if n := strings.Count(text, "[E"); n == 0 || (tt.cites != 0 && n != tt.cites) {
 				t.Errorf("reply %q has %d citations, want %d (0 means at least one)", text, n, tt.cites)
+			}
+		})
+	}
+}
+
+func TestMockEnglishRepliesUseEnglishPunctuation(t *testing.T) {
+	cjkPunct := []string{"，", "。", "：", "「", "」"}
+	// englishCite matches one straight-quoted citation such as "..."[E1].
+	englishCite := regexp.MustCompile(`"[^"]*"\[E\d\]`)
+	tests := []struct {
+		name     string
+		cause    autopsy.CauseOfDeath
+		question string
+		cites    []string           // expected citations joined exactly as they appear
+		evidence []autopsy.Evidence // nil means testEvidence()
+	}{
+		{"fix on OOM", autopsy.CauseOOMKilled, "How do I fix this?", []string{`"reason=OOMKilled exitCode=137"[E1]`}, nil},
+		{"cause question", autopsy.CauseOOMKilled, "How did you die?", []string{`"reason=OOMKilled exitCode=137"[E1]`, `"container app limits: memory=64Mi"[E2]`}, nil},
+		{"cause question on Error", autopsy.CauseError, "Why did you die?", []string{`"reason=OOMKilled exitCode=137"[E1]`, `"FATAL: out of memory, allocation failed"[E3]`}, nil},
+		{"other question", autopsy.CauseOOMKilled, "What is your favourite colour?", []string{`"reason=OOMKilled exitCode=137"[E1]`}, nil},
+		// The evidence text has inner double quotes. They must come out as single quotes.
+		{"inner double quote in evidence", autopsy.CauseOOMKilled, "How do I fix this?",
+			[]string{`"reason=OOMKilled exitCode=137 message='cgroup limit'"[E1]`},
+			[]autopsy.Evidence{{ID: "E1", Kind: "status", Text: `container app state: terminated reason=OOMKilled exitCode=137 message="cgroup limit"`}}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ev := tt.evidence
+			if ev == nil {
+				ev = testEvidence()
+			}
+			req := ChatRequest{
+				Messages: userMsg(tt.question),
+				Cause:    tt.cause,
+				Evidence: ev,
+				Purpose:  PurposeChat,
+			}
+			text := mockText(req)
+			if n := strings.Count(text, `"`); n != 2*len(tt.cites) {
+				t.Errorf("English reply %q has %d straight quotes, want %d (one pair per citation)", text, n, 2*len(tt.cites))
+			}
+			for _, p := range cjkPunct {
+				if strings.Contains(text, p) {
+					t.Errorf("English reply %q contains CJK punctuation %q", text, p)
+				}
+			}
+			found := englishCite.FindAllString(text, -1)
+			if len(found) != len(tt.cites) {
+				t.Fatalf("citations %q, want %q in %q", found, tt.cites, text)
+			}
+			for i, c := range tt.cites {
+				if found[i] != c {
+					t.Errorf("citation %d = %q, want %q", i, found[i], c)
+				}
+			}
+			if len(tt.cites) == 2 {
+				want := tt.cites[0] + ", " + tt.cites[1]
+				if !strings.Contains(text, want) {
+					t.Errorf("reply %q, want citations joined as %q", text, want)
+				}
 			}
 		})
 	}

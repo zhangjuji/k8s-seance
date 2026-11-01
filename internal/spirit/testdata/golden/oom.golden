@@ -55,4 +55,4 @@ Voice: breathless, heavier with every second.
 [user] 你昨天晚饭吃了什么？
 [spirit] 冥界没有留下记录。我只知道这一件事：「lastState: terminated reason=OOMKilled exitCode=137」[E1]。
 [user] How do I fix you?
-[spirit] Consider raising the memory limit above the real peak usage, and look for what keeps growing (caches, unbounded queues, leaks). Evidence: 「lastState: terminated reason=OOMKilled exitCode=137」[E1].
+[spirit] Consider raising the memory limit above the real peak usage, and look for what keeps growing (caches, unbounded queues, leaks). Evidence: "lastState: terminated reason=OOMKilled exitCode=137"[E1].

@@ -55,4 +55,4 @@ Voice: I was never really alive. I never got past the door.
 [user] 你昨天晚饭吃了什么？
 [spirit] 冥界没有留下记录。我只知道这一件事：「reason=ImagePullBackOff message=Back-off pulling image "ngin…」[E1]。
 [user] How do I fix you?
-[spirit] Check that the image name and tag really exist, check the registry address and access rights, and set imagePullSecrets if the registry is private. Evidence: 「reason=ImagePullBackOff message=Back-off pulling image "ngin…」[E1].
+[spirit] Check that the image name and tag really exist, check the registry address and access rights, and set imagePullSecrets if the registry is private. Evidence: "reason=ImagePullBackOff message=Back-off pulling image 'ngin…"[E1].
