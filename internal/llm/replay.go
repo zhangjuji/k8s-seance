@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 )
 
 // recording is the content of one fixture file, <sanitized fixtureID>.json.
@@ -20,8 +21,13 @@ type recording struct {
 	Turns     []recordedTurn `json:"turns"`
 }
 
-// recordedTurn is one spirit reply. Cause and LastUser are kept for reading
-// the file by hand; replay looks only at TurnIndex.
+// PostmortemTurnIndex is the TurnIndex of the postmortem call. Its prompt embeds
+// the whole transcript, so replay matches it by TurnIndex only, and follow-up
+// matching skips recorded turns with this index.
+const PostmortemTurnIndex = 100
+
+// recordedTurn is one spirit reply. Cause is kept for reading the file by hand.
+// LastUser is the question that replay matches for follow-ups.
 type recordedTurn struct {
 	TurnIndex int           `json:"turnIndex"`
 	Cause     string        `json:"cause"`
@@ -56,8 +62,8 @@ func fixtureFileName(id string) (name string, ok bool) {
 
 // ReplayProvider replays recorded replies from FS. Files are read lazily and kept
 // in a cache. A request is answered from the recording when the file for
-// FixtureID exists, its fixtureId matches, and it has a turn with TurnIndex.
-// Any other request goes to Fallback, which is MockProvider{} when nil.
+// FixtureID exists, its fixtureId matches, and a turn matches the request (see
+// lookup). Any other request goes to Fallback, which is MockProvider{} when nil.
 //
 // A file that is missing, unreadable or not valid JSON counts as a miss, and the
 // request goes to Fallback with no error. The bad file is not reported.
@@ -120,7 +126,13 @@ func (p *ReplayProvider) fallback() Provider {
 	return MockProvider{}
 }
 
-// lookup returns the recorded turn for req, if there is one.
+// lookup returns the recorded turn for req, if there is one. The rules are:
+//   - TurnIndex 0 (opening) and PostmortemTurnIndex: the recorded turn with the
+//     same TurnIndex. The question text is not compared.
+//   - Any other TurnIndex (follow-up): the recorded turn with 1 <= TurnIndex <
+//     PostmortemTurnIndex whose LastUser equals the request's last user message
+//     after normalizeQuestion. The lowest TurnIndex wins when several match.
+//     The request's TurnIndex does not have to match the recorded one.
 func (p *ReplayProvider) lookup(req ChatRequest) (recordedTurn, bool) {
 	if req.FixtureID == "" {
 		return recordedTurn{}, false
@@ -133,12 +145,53 @@ func (p *ReplayProvider) lookup(req ChatRequest) (recordedTurn, bool) {
 	if rec == nil || rec.FixtureID != req.FixtureID {
 		return recordedTurn{}, false
 	}
+
+	if req.TurnIndex == 0 || req.TurnIndex == PostmortemTurnIndex {
+		for _, t := range rec.Turns {
+			if t.TurnIndex == req.TurnIndex {
+				return t, true
+			}
+		}
+		return recordedTurn{}, false
+	}
+
+	question := normalizeQuestion(lastUserContent(req.Messages))
+	if question == "" {
+		return recordedTurn{}, false
+	}
+	var best recordedTurn
+	found := false
 	for _, t := range rec.Turns {
-		if t.TurnIndex == req.TurnIndex {
-			return t, true
+		if t.TurnIndex < 1 || t.TurnIndex >= PostmortemTurnIndex {
+			continue
+		}
+		if normalizeQuestion(t.LastUser) != question {
+			continue
+		}
+		if !found || t.TurnIndex < best.TurnIndex {
+			best, found = t, true
 		}
 	}
-	return recordedTurn{}, false
+	return best, found
+}
+
+// normalizeQuestion is the form in which questions are compared during replay.
+// It trims surrounding spaces, maps full-width ？！，。 to ?!,., strips trailing
+// ?!., and spaces, and folds ASCII letters to lower case. Both the request
+// question and the recorded LastUser go through it. The recorder stores the
+// question unchanged, so recordings stay easy to read.
+func normalizeQuestion(s string) string {
+	s = strings.NewReplacer("？", "?", "！", "!", "，", ",", "。", ".").Replace(strings.TrimSpace(s))
+	s = strings.TrimRightFunc(s, func(r rune) bool {
+		return r == '?' || r == '!' || r == '.' || r == ',' || unicode.IsSpace(r)
+	})
+	b := []byte(s)
+	for i, c := range b {
+		if 'A' <= c && c <= 'Z' {
+			b[i] = c + ('a' - 'A')
+		}
+	}
+	return string(b)
 }
 
 // load returns the parsed recording name, reading it on first use. It returns nil
@@ -177,6 +230,8 @@ func readRecording(fsys fs.FS, name string) *recording {
 // Recorder passes each request to Inner and writes each successful reply to
 // Dir/<sanitized fixtureID>.json. A turn with the same TurnIndex as an existing
 // one replaces it. Other turns in the file are kept. Failed calls are not recorded.
+// Each turn stores the last user message as sent. Replay compares it through
+// normalizeQuestion, so the same question matches whatever index it is asked at.
 // A file that exists but cannot be decoded, or that belongs to another fixture ID,
 // is an error and is not overwritten.
 type Recorder struct {

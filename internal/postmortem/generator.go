@@ -37,7 +37,7 @@ const (
 	layout = "2006-01-02 15:04:05 UTC"
 	// postmortemTurnIndex is the TurnIndex of the postmortem call. It keeps the
 	// call apart from the séance turns when a recording is replayed.
-	postmortemTurnIndex = 100
+	postmortemTurnIndex = llm.PostmortemTurnIndex
 	// postmortemMaxTokens is the output limit of the postmortem call.
 	postmortemMaxTokens = 400
 	// transcriptTurns is how many of the last séance turns go to the model.
