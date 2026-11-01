@@ -31,6 +31,8 @@ func (s *Server) registerSeanceRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/seances/{id}", s.handleGetSeance)
 	mux.HandleFunc("GET /api/seances/{id}/stream", s.handleStream)
 	mux.HandleFunc("POST /api/seances/{id}/messages", s.handleMessage)
+	mux.HandleFunc("POST /api/seances/{id}/postmortem", s.handlePostmortem)
+	mux.HandleFunc("GET /api/seances/{id}/postmortem.md", s.handlePostmortemDownload)
 	mux.HandleFunc("GET /seances/{id}", s.handleSeancePage)
 }
 
@@ -309,6 +311,96 @@ func (s *Server) handleMessage(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.Redirect(w, r, seancePageURL(se.id), http.StatusSeeOther)
 	}
+}
+
+// postmortemReply is the 200 body of POST /api/seances/{id}/postmortem for JSON clients.
+type postmortemReply struct {
+	Markdown    string `json:"markdown"`
+	Mode        string `json:"mode"`
+	Reason      string `json:"reason"`
+	DownloadURL string `json:"downloadUrl"`
+}
+
+// postmortemView is the data of templates/postmortem.html.
+type postmortemView struct {
+	Markdown    string
+	Mode        string
+	Reason      string
+	DownloadURL string
+}
+
+// handlePostmortem generates the postmortem again and stores it. JSON clients get
+// postmortemReply, htmx requests get the panel fragment, and other clients get the
+// Markdown as text/markdown.
+func (s *Server) handlePostmortem(w http.ResponseWriter, r *http.Request) {
+	se := s.seanceFor(w, r)
+	if se == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), turnTimeout)
+	defer cancel()
+	doc, err := se.postmortemFor(ctx, true)
+	if err != nil {
+		s.opts.Logger.Printf("postmortem for séance %s: %v", se.id, err)
+		s.fail(w, r, http.StatusGatewayTimeout, "复盘生成超时，请稍后再试。")
+		return
+	}
+
+	switch {
+	case wantsJSON(r):
+		writeJSON(w, http.StatusOK, postmortemReply{
+			Markdown:    doc.markdown,
+			Mode:        doc.mode,
+			Reason:      doc.reason,
+			DownloadURL: seanceDownloadURL(se.id),
+		})
+	case r.Header.Get("HX-Request") != "":
+		var buf bytes.Buffer
+		v := postmortemView{Markdown: doc.markdown, Mode: doc.mode, Reason: doc.reason, DownloadURL: seanceDownloadURL(se.id)}
+		if err := s.seancePages.ExecuteTemplate(&buf, "postmortem", v); err != nil {
+			s.opts.Logger.Printf("render postmortem %s: %v", se.id, err)
+			http.Error(w, "render failed", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write(buf.Bytes())
+	default:
+		w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
+		_, _ = io.WriteString(w, doc.markdown)
+	}
+}
+
+// handlePostmortemDownload returns the stored postmortem as a .md attachment. It
+// generates one first when none exists.
+func (s *Server) handlePostmortemDownload(w http.ResponseWriter, r *http.Request) {
+	se := s.seanceFor(w, r)
+	if se == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), turnTimeout)
+	defer cancel()
+	doc, err := se.postmortemFor(ctx, false)
+	if err != nil {
+		s.opts.Logger.Printf("postmortem for séance %s: %v", se.id, err)
+		s.fail(w, r, http.StatusGatewayTimeout, "复盘生成超时，请稍后再试。")
+		return
+	}
+	name := "postmortem-" + fileSafe(se.pod) + "-" + doc.at.Format("20060102") + ".md"
+	h := w.Header()
+	h.Set("Content-Type", "text/markdown; charset=utf-8")
+	h.Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", name))
+	_, _ = io.WriteString(w, doc.markdown)
+}
+
+// fileSafe keeps ASCII letters, digits and '-', and replaces every other rune with '-'.
+func fileSafe(s string) string {
+	return strings.Map(func(r rune) rune {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '-':
+			return r
+		}
+		return '-'
+	}, s)
 }
 
 // handleSeancePage renders the séance page. Turns recorded so far are included in

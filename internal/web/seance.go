@@ -15,6 +15,7 @@ import (
 
 	"github.com/zhangjuji/k8s-seance/internal/autopsy"
 	"github.com/zhangjuji/k8s-seance/internal/llm"
+	"github.com/zhangjuji/k8s-seance/internal/postmortem"
 	"github.com/zhangjuji/k8s-seance/internal/spirit"
 )
 
@@ -122,6 +123,45 @@ type seance struct {
 	openingDone bool
 	openRun     *openingRun // the opening in progress, or nil
 	subs        map[*subscriber]struct{}
+	pm          *postmortemDoc // the last generated postmortem, or nil
+}
+
+// postmortemDoc is a generated postmortem and how it was made.
+type postmortemDoc struct {
+	markdown string
+	mode     string
+	reason   string
+	at       time.Time
+}
+
+// postmortemFor returns the stored postmortem. It generates one when none exists
+// or when regen is true. The call takes askMu, so it does not overlap a question.
+func (se *seance) postmortemFor(ctx context.Context, regen bool) (postmortemDoc, error) {
+	se.askMu.Lock()
+	defer se.askMu.Unlock()
+	if !regen {
+		se.mu.Lock()
+		doc := se.pm
+		se.mu.Unlock()
+		if doc != nil {
+			return *doc, nil
+		}
+	}
+	in := postmortem.Input{
+		Autopsy:    se.sess.Autopsy,
+		Class:      se.sess.Class,
+		Evidence:   se.sess.Evidence,
+		Transcript: se.sess.Transcript(),
+	}
+	res, err := postmortem.Generate(ctx, in, se.sess.Provider())
+	if err != nil {
+		return postmortemDoc{}, err
+	}
+	doc := postmortemDoc{markdown: res.Markdown, mode: res.Mode, reason: res.Reason, at: time.Now().UTC()}
+	se.mu.Lock()
+	se.pm = &doc
+	se.mu.Unlock()
+	return doc, nil
 }
 
 // openingRun is one attempt at the opening. done is closed when it ends, and err
@@ -450,20 +490,21 @@ func isAdvice(text string) bool {
 
 // seancePage is the data of templates/seance.html.
 type seancePage struct {
-	Title       string
-	ID          string
-	Pod         string
-	BadgeClass  string
-	Cause       string
-	Died        string
-	StreamURL   string
-	MessagesURL string
-	Used        int
-	Left        int
-	Total       int
-	Exhausted   bool
-	Turns       []template.HTML
-	Evidence    []autopsy.Evidence
+	Title         string
+	ID            string
+	Pod           string
+	BadgeClass    string
+	Cause         string
+	Died          string
+	StreamURL     string
+	MessagesURL   string
+	Used          int
+	Left          int
+	Total         int
+	Exhausted     bool
+	Turns         []template.HTML
+	Evidence      []autopsy.Evidence
+	PostmortemURL string
 }
 
 // pageData builds the data for the séance page. It includes the turns recorded so
@@ -476,20 +517,21 @@ func (se *seance) pageData() seancePage {
 		html = append(html, template.HTML(t.HTML))
 	}
 	return seancePage{
-		Title:       se.pod,
-		ID:          se.id,
-		Pod:         se.pod,
-		BadgeClass:  badgeClass(se.cause),
-		Cause:       string(se.cause),
-		Died:        se.died,
-		StreamURL:   seanceStreamURL(se.id),
-		MessagesURL: seanceMessagesURL(se.id),
-		Used:        used,
-		Left:        left,
-		Total:       used + left,
-		Exhausted:   left == 0,
-		Turns:       html,
-		Evidence:    se.evidence,
+		Title:         se.pod,
+		ID:            se.id,
+		Pod:           se.pod,
+		BadgeClass:    badgeClass(se.cause),
+		Cause:         string(se.cause),
+		Died:          se.died,
+		StreamURL:     seanceStreamURL(se.id),
+		MessagesURL:   seanceMessagesURL(se.id),
+		Used:          used,
+		Left:          left,
+		Total:         used + left,
+		Exhausted:     left == 0,
+		Turns:         html,
+		Evidence:      se.evidence,
+		PostmortemURL: seancePostmortemURL(se.id),
 	}
 }
 
@@ -506,4 +548,10 @@ func mustJSON(v any) []byte {
 
 func seanceStreamURL(id string) string   { return "/api/seances/" + id + "/stream" }
 func seanceMessagesURL(id string) string { return "/api/seances/" + id + "/messages" }
-func seancePageURL(id string) string     { return "/seances/" + id }
+func seancePostmortemURL(id string) string {
+	return "/api/seances/" + id + "/postmortem"
+}
+func seanceDownloadURL(id string) string {
+	return "/api/seances/" + id + "/postmortem.md"
+}
+func seancePageURL(id string) string { return "/seances/" + id }

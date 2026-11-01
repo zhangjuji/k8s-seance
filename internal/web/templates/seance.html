@@ -24,7 +24,8 @@
         <button type="submit"{{if .Exhausted}} disabled{{end}}>问</button>
       </form>
 
-      <button type="button" class="finish" disabled title="复盘面板在任务 7.3 实现">结束降灵会，生成复盘</button>
+      <button type="button" class="finish" hx-post="{{.PostmortemURL}}" hx-target="#postmortem" hx-swap="innerHTML">结束降灵会，生成复盘</button>
+      <div id="postmortem" class="postmortem-panel"></div>
     </div>
 
     <aside class="evidence">

@@ -103,7 +103,7 @@ func New(opts Options) (*Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("parse templates: %w", err)
 	}
-	seancePages, err := template.ParseFS(templateFS, "templates/layout.html", "templates/seance.html", "templates/turn.html")
+	seancePages, err := template.ParseFS(templateFS, "templates/layout.html", "templates/seance.html", "templates/turn.html", "templates/postmortem.html")
 	if err != nil {
 		return nil, fmt.Errorf("parse séance templates: %w", err)
 	}

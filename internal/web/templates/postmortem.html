@@ -1,0 +1,21 @@
+{{define "postmortem"}}<section class="postmortem" aria-label="复盘">
+  <div class="pm-bar">
+    <button type="button" id="pm-copy">复制</button>
+    <a class="pm-download" href="{{.DownloadURL}}">下载 .md</a>
+  </div>
+  {{if eq .Mode "template"}}<p class="pm-note">这份复盘由模板生成，没有调用亡灵的 LLM（原因：{{.Reason}}）。</p>{{end}}
+  <pre id="pm-md">{{.Markdown}}</pre>
+  <script>
+  (function () {
+    var btn = document.getElementById('pm-copy');
+    btn.addEventListener('click', function () {
+      var text = document.getElementById('pm-md').textContent;
+      navigator.clipboard.writeText(text).then(function () {
+        btn.textContent = '已复制';
+      }, function () {
+        btn.textContent = '复制失败';
+      });
+    });
+  })();
+  </script>
+</section>{{end}}

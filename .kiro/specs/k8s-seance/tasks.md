@@ -59,7 +59,7 @@
     - _Requirements: 1.2, 1.3, 1.4_
   - [x] 7.2 降灵会页：SSE 流式聊天、证据卡片展开、修复建议
     - _Requirements: 4.2, 4.3, 4.5_
-  - [ ] 7.3 复盘面板：展示 Markdown、复制、下载 `.md`
+  - [x] 7.3 复盘面板：展示 Markdown、复制、下载 `.md`
     - _Requirements: 5.3_
   - [ ] 7.4 暗色主题与烛光/雾气 CSS（`static/style.css`，手写）
 
