@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/zhangjuji/k8s-seance/internal/autopsy"
 )
 
 const (
@@ -208,19 +210,15 @@ func readStream(r io.Reader, req ChatRequest, onDelta func(string) error) (Usage
 	}, nil
 }
 
-// buildRequestBody puts the evidence into one system message, then the chat turns.
+// buildRequestBody sends the chat turns as given. When req.Messages has no system
+// message, it puts the evidence into a placeholder system message first. When
+// req.Messages has one (the séance persona, which already carries the evidence),
+// no placeholder is added, so the model sees exactly one system message.
 func buildRequestBody(model string, req ChatRequest) chatRequestBody {
-	var sys strings.Builder
-	sys.WriteString(placeholderSystem)
-	if len(req.Evidence) > 0 {
-		sys.WriteString("\n\nEvidence:\n")
-		for _, e := range req.Evidence {
-			fmt.Fprintf(&sys, "%s [%s] %s\n", e.ID, e.Kind, e.Text)
-		}
-	}
-
 	msgs := make([]chatMessage, 0, len(req.Messages)+1)
-	msgs = append(msgs, chatMessage{Role: "system", Content: strings.TrimRight(sys.String(), "\n")})
+	if !hasSystemMessage(req.Messages) {
+		msgs = append(msgs, chatMessage{Role: "system", Content: placeholderSystemContent(req.Evidence)})
+	}
 	for _, m := range req.Messages {
 		msgs = append(msgs, chatMessage{Role: m.Role, Content: m.Content})
 	}
@@ -230,6 +228,30 @@ func buildRequestBody(model string, req ChatRequest) chatRequestBody {
 		maxTokens = defaultMaxTokens
 	}
 	return chatRequestBody{Model: model, Messages: msgs, Stream: true, MaxTokens: maxTokens}
+}
+
+// placeholderSystemContent is the placeholder system text: the fixed line and,
+// when there is evidence, one line per item.
+func placeholderSystemContent(ev []autopsy.Evidence) string {
+	var sys strings.Builder
+	sys.WriteString(placeholderSystem)
+	if len(ev) > 0 {
+		sys.WriteString("\n\nEvidence:\n")
+		for _, e := range ev {
+			fmt.Fprintf(&sys, "%s [%s] %s\n", e.ID, e.Kind, e.Text)
+		}
+	}
+	return strings.TrimRight(sys.String(), "\n")
+}
+
+// hasSystemMessage reports whether msgs contains a message with role "system".
+func hasSystemMessage(msgs []Message) bool {
+	for _, m := range msgs {
+		if m.Role == "system" {
+			return true
+		}
+	}
+	return false
 }
 
 // retryable reports whether a failed attempt may be retried.

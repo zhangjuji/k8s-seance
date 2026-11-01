@@ -367,3 +367,68 @@ func TestHTTPProviderNotConfigured(t *testing.T) {
 func decodeJSON(r *http.Request, v any) error {
 	return json.NewDecoder(r.Body).Decode(v)
 }
+
+func TestHTTPProviderSendsOneSystemMessage(t *testing.T) {
+	const persona = "PERSONA: you are the ghost. [E1] already in here."
+	tests := []struct {
+		name     string
+		messages []Message
+		// wantSys is the content of the one system message expected in the body.
+		wantSys  string
+		wantRole []string
+	}{
+		{
+			name:     "no system message in request gets placeholder with evidence",
+			messages: []Message{{Role: "user", Content: "how did you die?"}},
+			wantSys:  "", // checked with Contains below
+			wantRole: []string{"system", "user"},
+		},
+		{
+			name:     "persona system message is sent without placeholder",
+			messages: []Message{{Role: "system", Content: persona}, {Role: "user", Content: "how did you die?"}},
+			wantSys:  persona,
+			wantRole: []string{"system", "user"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var gotBody map[string]any
+			p, _ := newTestProvider(t, func(w http.ResponseWriter, r *http.Request) {
+				if err := decodeJSON(r, &gotBody); err != nil {
+					t.Errorf("decode request body: %v", err)
+				}
+				sseBody(w, "[DONE]")
+			})
+			req := testRequest()
+			req.Messages = tt.messages
+			if _, err := p.Stream(context.Background(), req, func(string) error { return nil }); err != nil {
+				t.Fatalf("Stream: unexpected error: %v", err)
+			}
+
+			msgs, _ := gotBody["messages"].([]any)
+			var roles []string
+			var systems []string
+			for _, m := range msgs {
+				mm := m.(map[string]any)
+				role := mm["role"].(string)
+				roles = append(roles, role)
+				if role == "system" {
+					systems = append(systems, mm["content"].(string))
+				}
+			}
+			if strings.Join(roles, ",") != strings.Join(tt.wantRole, ",") {
+				t.Fatalf("roles = %v, want %v", roles, tt.wantRole)
+			}
+			if len(systems) != 1 {
+				t.Fatalf("system messages = %d, want exactly 1", len(systems))
+			}
+			if tt.wantSys != "" {
+				if systems[0] != tt.wantSys {
+					t.Errorf("system content = %q, want %q", systems[0], tt.wantSys)
+				}
+			} else if !strings.Contains(systems[0], "E1 [status] container app state") {
+				t.Errorf("placeholder system = %q, want evidence line E1", systems[0])
+			}
+		})
+	}
+}

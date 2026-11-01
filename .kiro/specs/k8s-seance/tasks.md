@@ -40,12 +40,12 @@
   - [ ] 4.5 拿到巨基提供的接口地址和 key 后，用真实接口跑 3 个亡灵并录制 `fixtures/replay/`
     - _Requirements: 6.1, 7.3_
 
-- [ ] 5. 亡灵对话
+- [x] 5. 亡灵对话
   - [x] 5.1 编写人设提示词与按死因的声线小抄（`internal/spirit/prompts/*.md`，用 go:embed 打包）
     - _Requirements: 4.1, 4.4, 4.5, 4.6_
   - [x] 5.2 实现 séance 会话（`internal/spirit/persona.go`、`chat.go`）：开场白、追问、历史裁剪、`[E#]` 引用
     - _Requirements: 4.1, 4.2, 4.3_
-  - [ ] 5.3 提示词快照测试（replay 模式，3 个 fixtures，golden 文件）
+  - [x] 5.3 提示词快照测试（replay 模式，3 个 fixtures，golden 文件）
     - _Requirements: 4.1, 4.3, 4.4_
 
 - [ ] 6. 故障复盘
