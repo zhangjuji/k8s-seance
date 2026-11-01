@@ -5,6 +5,8 @@
 - [ ] 1. 项目骨架与演示集群
   - [ ] 1.1 初始化 Go 仓库（Go 1.23+，`go mod init`），按 structure.md 建目录骨架，MIT LICENSE，README 骨架，确认 `.kiro/` 不在 `.gitignore`；等 Devpost 发 Didit 身份验证邮件并完成验证
     - _Requirements: 6.1_
+    - [x] repo skeleton, go.mod, LICENSE, README skeleton (done by Kiro)
+    - [ ] Devpost Didit identity verification (human: juji)
   - [ ] 1.2 编写 `demo/kind-config.yaml`、`oom.yaml`、`crashloop.yaml`、`imagepull.yaml` 和 `kill-them-all.sh`（含 `--cleanup`）
     - _Requirements: 8.1, 8.2, 8.3_
   - [ ] 1.3 编写 `demo/rbac-readonly.yaml`
