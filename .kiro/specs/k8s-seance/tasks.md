@@ -41,7 +41,7 @@
     - _Requirements: 6.1, 7.3_
 
 - [ ] 5. 亡灵对话
-  - [ ] 5.1 编写人设提示词与按死因的声线小抄（`internal/spirit/prompts/*.md`，用 go:embed 打包）
+  - [x] 5.1 编写人设提示词与按死因的声线小抄（`internal/spirit/prompts/*.md`，用 go:embed 打包）
     - _Requirements: 4.1, 4.4, 4.5, 4.6_
   - [ ] 5.2 实现 séance 会话（`internal/spirit/persona.go`、`chat.go`）：开场白、追问、历史裁剪、`[E#]` 引用
     - _Requirements: 4.1, 4.2, 4.3_
