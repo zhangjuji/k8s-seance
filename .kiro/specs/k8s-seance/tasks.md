@@ -15,7 +15,7 @@
 - [ ] 2. 只读采集层
   - [x] 2.1 定义 `PodAutopsy` 等类型（`internal/autopsy/model.go`）；实现 `ListSpirits` 的筛选逻辑
     - _Requirements: 1.1, 1.2, 1.4_
-  - [ ] 2.2 实现 `CollectAutopsy`（client-go）：Pod 状态、容器 state/lastState、Events、当前与 previous 日志尾部
+  - [x] 2.2 实现 `CollectAutopsy`（client-go）：Pod 状态、容器 state/lastState、Events、当前与 previous 日志尾部
     - _Requirements: 2.1, 2.5_
   - [ ] 2.3 实现只读守卫测试：`go test` 扫描 `internal/` 源码，禁止 Create/Update/Patch/Delete/Evict 等写类 API 调用
     - _Requirements: 2.2_
