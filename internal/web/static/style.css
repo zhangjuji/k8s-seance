@@ -1,38 +1,408 @@
-/* Placeholder styles for task 7.1. The dark theme and candle effects come in task 7.4. */
+/* K8s 降灵会: dark theme with candlelight and fog (task 7.4).
+   Hand-written CSS. No frameworks, external fonts, images or CDNs.
+   Atmosphere uses gradients and keyframes only. Every animation is disabled
+   under prefers-reduced-motion. */
+
+:root {
+  --bg: #121016;
+  --bg-2: #1b1821;
+  --bg-3: #242030;
+  --line: #3a3346;
+  --line-strong: #5a5170;
+  --text: #ece6dc;
+  --muted: #c2b9cc;
+  --accent: #cdbcff;
+  --flame: #ffb347;
+  --flame-soft: #ffd9a0;
+  --flame-dim: #7a5a2a;
+  --advice: #b6e09a;
+  --advice-bg: #1f2a1c;
+  --notice-bg: #3a1a1a;
+  --notice-line: #7a3434;
+  --notice-text: #ffe1e1;
+  --banner-bg: #33280f;
+  --banner-line: #7a6424;
+  --banner-text: #ffeccc;
+  --code-bg: #0d0c11;
+  --badge-default: #3f3b4c;
+  --badge-oom: #7a2a6e;
+  --badge-crash: #8a4a1e;
+  --badge-pull: #1f4f7a;
+  --badge-probe: #6b6a1e;
+  --glow: rgba(255, 170, 70, 0.35);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { background: var(--bg); }
+
 body {
   margin: 0;
-  font-family: system-ui, sans-serif;
-  background: #15151b;
-  color: #e6e6ea;
+  min-height: 100vh;
+  font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif;
+  line-height: 1.5;
+  background:
+    radial-gradient(ellipse at 50% -10%, #2a2033 0%, transparent 55%),
+    var(--bg);
+  color: var(--text);
+  overflow-x: hidden;
 }
-.topbar { display: flex; gap: 1.5rem; align-items: center; padding: 0.75rem 1.25rem; border-bottom: 1px solid #2a2a33; }
-.topbar a { color: #b9a6ff; }
-main { padding: 1rem 1.25rem; }
-.banner { padding: 0.5rem 0.75rem; margin-bottom: 1rem; border: 1px solid #6b5a1e; background: #2b2410; }
-.notice { padding: 0.75rem; margin: 1rem 0; border: 1px solid #6b2a2a; background: #2b1515; }
-table { border-collapse: collapse; width: 100%; }
-th, td { text-align: left; padding: 0.4rem 0.6rem; border-bottom: 1px solid #2a2a33; }
-.badge { display: inline-block; padding: 0.1rem 0.5rem; border-radius: 0.25rem; background: #3a3a46; }
-.badge-oomkilled { background: #5a1e5a; }
-.badge-crashloopbackoff { background: #5a3a1e; }
-.badge-imagepullbackoff { background: #1e3a5a; }
-.badge-probefailure { background: #4a4a1e; }
-.badge-error, .badge-unknown { background: #3a3a46; }
 
-/* Séance page layout (task 7.2). The dark theme and candle effects come in task 7.4. */
-.seance-head { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: baseline; margin-bottom: 1rem; }
-.seance-head h1 { font-size: 1.25rem; margin: 0; }
-.seance-body { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 1.25rem; }
-.log { display: flex; flex-direction: column; gap: 0.5rem; min-height: 6rem; }
-.turn { padding: 0.5rem 0.75rem; border-left: 3px solid #3a3a46; background: #1d1d25; }
-.turn-user { border-left-color: #6a6a7a; }
-.turn-spirit { border-left-color: #b9a6ff; }
-.turn-advice { background: #20261d; border-left-color: #8fbf6a; }
-.turn .who { display: block; font-size: 0.8rem; color: #9a9aa6; }
-.turn .text { margin: 0.25rem 0 0; white-space: pre-wrap; }
-.ev-link { color: #b9a6ff; }
-.quick, .ask { display: flex; gap: 0.5rem; margin-top: 0.75rem; }
-.ask input { flex: 1; }
+/* Fog: two full-viewport layers behind the content. They drift slowly and never take clicks. */
+body::before,
+body::after {
+  content: "";
+  position: fixed;
+  inset: -25%;
+  z-index: 0;
+  pointer-events: none;
+}
+body::before {
+  background:
+    radial-gradient(ellipse 38% 26% at 30% 40%, rgba(200, 190, 225, 0.11), transparent 70%),
+    radial-gradient(ellipse 30% 22% at 72% 65%, rgba(150, 140, 185, 0.09), transparent 70%);
+  animation: fog-drift 46s ease-in-out infinite alternate;
+}
+body::after {
+  background:
+    radial-gradient(ellipse 34% 20% at 65% 25%, rgba(190, 180, 215, 0.08), transparent 70%),
+    radial-gradient(ellipse 28% 24% at 20% 80%, rgba(255, 180, 110, 0.04), transparent 70%);
+  animation: fog-drift-alt 62s ease-in-out infinite alternate;
+}
+
+/* Page content sits above the fog. */
+.topbar,
+main {
+  position: relative;
+  z-index: 1;
+}
+
+.topbar {
+  display: flex;
+  gap: 1.5rem;
+  align-items: center;
+  padding: 0.75rem 1.25rem;
+  border-bottom: 1px solid var(--line);
+  background: linear-gradient(180deg, rgba(27, 24, 33, 0.85), rgba(18, 16, 22, 0.6));
+}
+.topbar strong {
+  color: var(--flame-soft);
+  animation: title-glow 3.4s ease-in-out infinite;
+}
+.topbar nav { display: flex; gap: 1rem; }
+.topbar a { color: var(--accent); }
+
+/* A small candle at the right end of the header. The wax is a gradient and the flame is a warm glow. */
+.topbar::after {
+  content: "";
+  order: 10;
+  margin-left: auto;
+  flex: 0 0 auto;
+  width: 0.55rem;
+  height: 1.6rem;
+  border-radius: 0.2rem 0.2rem 0.3rem 0.3rem;
+  background:
+    radial-gradient(ellipse 70% 40% at 50% 0%, #ffe6a8 0%, #ffab4a 45%, transparent 100%),
+    linear-gradient(180deg, #fff6e0, #d9c9a6);
+  box-shadow: 0 0 0.7rem 0.25rem var(--glow);
+  animation: candle-flicker 2.6s ease-in-out infinite;
+}
+
+main {
+  padding: 1rem 1.25rem;
+  max-width: 1280px;
+}
+
+a { color: var(--accent); }
+a:hover { color: var(--flame-soft); }
+
+h1, h2 { color: var(--flame-soft); font-weight: 600; }
+h2 { font-size: 1.05rem; }
+
+:focus-visible {
+  outline: 2px solid var(--flame);
+  outline-offset: 2px;
+}
+
+/* Buttons and inputs */
+button {
+  font: inherit;
+  color: var(--text);
+  background: var(--bg-3);
+  border: 1px solid var(--line-strong);
+  border-radius: 0.35rem;
+  padding: 0.35rem 0.8rem;
+  cursor: pointer;
+}
+button:hover:not(:disabled) {
+  border-color: var(--flame);
+  color: #fff;
+}
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+input[type="text"],
+input:not([type]) {
+  font: inherit;
+  color: var(--text);
+  background: var(--code-bg);
+  border: 1px solid var(--line-strong);
+  border-radius: 0.35rem;
+  padding: 0.35rem 0.6rem;
+}
+input[type="text"]:focus,
+input:not([type]):focus {
+  border-color: var(--flame);
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(255, 179, 71, 0.25);
+}
+
+.banner {
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 1rem;
+  border: 1px solid var(--banner-line);
+  background: var(--banner-bg);
+  color: var(--banner-text);
+  border-radius: 0.35rem;
+}
+.notice {
+  padding: 0.75rem;
+  margin: 1rem 0;
+  border: 1px solid var(--notice-line);
+  background: var(--notice-bg);
+  color: var(--notice-text);
+  border-radius: 0.35rem;
+}
+.notice p { margin: 0.25rem 0; }
+
+table { border-collapse: collapse; width: 100%; }
+th, td {
+  text-align: left;
+  padding: 0.4rem 0.6rem;
+  border-bottom: 1px solid var(--line);
+}
+th { color: var(--muted); font-weight: 600; }
+tbody tr:hover { background: rgba(255, 179, 71, 0.04); }
+
+/* Cause badges: one colour per cause. The default colour covers the rest. */
+.badge {
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  border-radius: 0.25rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--badge-default);
+  color: #f5f0ff;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+.badge-oomkilled { background: var(--badge-oom); }
+.badge-crashloopbackoff { background: var(--badge-crash); }
+.badge-imagepullbackoff { background: var(--badge-pull); }
+.badge-probefailure { background: var(--badge-probe); }
+.badge-error, .badge-unknown { background: var(--badge-default); }
+
+/* Séance page layout */
+.seance-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: baseline;
+  margin-bottom: 1rem;
+}
+.seance-head h1 {
+  font-size: 1.25rem;
+  margin: 0;
+  text-shadow: 0 0 0.6rem var(--glow);
+}
+.died { color: var(--muted); font-size: 0.9rem; }
+
+/* Budget meter: a pill with a warm border. */
+.meter {
+  display: inline-block;
+  padding: 0.15rem 0.7rem;
+  border: 1px solid var(--flame-dim);
+  border-radius: 999px;
+  background: rgba(255, 179, 71, 0.08);
+  color: var(--flame-soft);
+  font-size: 0.85rem;
+}
+
+.seance-body {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: 1.25rem;
+}
+.log {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  min-height: 6rem;
+}
+
+/* Chat bubbles. Spirit turns glow faintly, like a candle lit behind them. */
+.turn {
+  padding: 0.5rem 0.75rem;
+  border-left: 3px solid var(--line-strong);
+  background: var(--bg-3);
+  border-radius: 0.35rem;
+  overflow-wrap: anywhere;
+}
+.turn-user { border-left-color: #7a7490; }
+.turn-spirit {
+  border-left-color: var(--flame);
+  background: linear-gradient(90deg, rgba(255, 179, 71, 0.07), var(--bg-3) 40%);
+  box-shadow: 0 0 1.1rem -0.25rem rgba(255, 160, 70, 0.28);
+}
+/* Fix advice gets its own green colour and a label. */
+.turn-advice {
+  background: var(--advice-bg);
+  border-left-color: var(--advice);
+  box-shadow: none;
+}
+.turn-advice .who::after {
+  content: "· 修复建议";
+  color: var(--advice);
+  margin-left: 0.4rem;
+}
+.turn .who {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.turn-spirit .who { color: var(--flame-soft); }
+.turn .text {
+  margin: 0.25rem 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.ev-link {
+  color: var(--accent);
+  text-decoration: underline dotted;
+  text-underline-offset: 0.2em;
+}
+.quick, .ask {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+.ask input { flex: 1; min-width: 0; }
 .typing[hidden] { display: none; }
-.evidence details { margin-bottom: 0.5rem; }
-.evidence pre { overflow-x: auto; white-space: pre-wrap; background: #101016; padding: 0.5rem; }
+.typing { animation: typing-breathe 2.2s ease-in-out infinite; }
+
+/* Evidence cards */
+.evidence details {
+  margin-bottom: 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 0.35rem;
+  background: var(--bg-2);
+  padding: 0.2rem 0.6rem 0.5rem;
+}
+.evidence details[open] { border-color: var(--flame-dim); }
+.evidence summary {
+  cursor: pointer;
+  padding: 0.35rem 0;
+  color: var(--text);
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+.evidence summary:hover { color: var(--flame-soft); }
+.evidence details:target {
+  border-color: var(--flame);
+  box-shadow: 0 0 0.8rem rgba(255, 179, 71, 0.3);
+}
+.evidence pre {
+  overflow-x: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: var(--code-bg);
+  color: var(--text);
+  padding: 0.5rem;
+  border-radius: 0.3rem;
+  font-size: 0.82rem;
+  margin: 0;
+}
+
+/* Postmortem panel */
+.postmortem-panel { margin-top: 1rem; }
+.postmortem {
+  border: 1px solid var(--line-strong);
+  background: var(--bg-2);
+  border-radius: 0.4rem;
+  padding: 0.75rem;
+}
+.pm-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+.pm-download { font-size: 0.95rem; }
+.pm-note { color: var(--muted); font-size: 0.9rem; margin: 0.25rem 0 0.5rem; }
+.postmortem pre {
+  max-height: 28rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  background: var(--code-bg);
+  color: var(--text);
+  padding: 0.75rem;
+  border-radius: 0.3rem;
+  font-size: 0.85rem;
+  line-height: 1.55;
+  margin: 0;
+}
+.finish { margin-top: 1rem; }
+
+/* Keyframes. Only transform, opacity and shadows animate. */
+@keyframes candle-flicker {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0.7rem 0.25rem var(--glow); }
+  23% { opacity: 0.92; box-shadow: 0 0 0.9rem 0.35rem rgba(255, 170, 70, 0.45); }
+  47% { opacity: 0.97; box-shadow: 0 0 0.6rem 0.2rem rgba(255, 170, 70, 0.3); }
+  71% { opacity: 0.9; box-shadow: 0 0 1rem 0.4rem rgba(255, 170, 70, 0.5); }
+}
+@keyframes title-glow {
+  0%, 100% { text-shadow: 0 0 0.4rem rgba(255, 170, 70, 0.25); }
+  50% { text-shadow: 0 0 0.9rem rgba(255, 170, 70, 0.55); }
+}
+@keyframes typing-breathe {
+  0%, 100% { opacity: 0.85; }
+  50% { opacity: 1; }
+}
+@keyframes fog-drift {
+  from { transform: translate3d(-4%, 0, 0) scale(1); }
+  to { transform: translate3d(4%, -2%, 0) scale(1.05); }
+}
+@keyframes fog-drift-alt {
+  from { transform: translate3d(3%, -1%, 0) scale(1.03); }
+  to { transform: translate3d(-5%, 2%, 0) scale(1); }
+}
+
+/* Small screens: a single column. */
+@media (max-width: 800px) {
+  .topbar {
+    flex-wrap: wrap;
+    gap: 0.6rem 1rem;
+    padding: 0.6rem 0.9rem;
+  }
+  main { padding: 0.75rem 0.9rem; }
+  .seance-body { grid-template-columns: minmax(0, 1fr); }
+  .seance-head h1 { font-size: 1.1rem; }
+  table { display: block; overflow-x: auto; white-space: nowrap; }
+  .quick { flex-wrap: wrap; }
+  .ask { flex-wrap: wrap; }
+  .ask input { flex-basis: 100%; }
+  .evidence { margin-top: 0.5rem; }
+}
+
+/* Users who ask for less motion get no animations and no transitions. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
