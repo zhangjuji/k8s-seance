@@ -29,7 +29,7 @@
     - _Requirements: 2.3, 2.4, 6.4_
 
 - [ ] 4. LLM 接入与成本控制
-  - [ ] 4.1 `internal/llm`：定义 `Provider` 接口；先实现 `MockProvider`（按死因 + 证据出固定台词、模拟流式），开发阶段默认用它
+  - [x] 4.1 `internal/llm`：定义 `Provider` 接口；先实现 `MockProvider`（按死因 + 证据出固定台词、模拟流式），开发阶段默认用它
     - _Requirements: 7.4_
   - [ ] 4.2 `internal/llm/client.go`：`HTTPProvider`，用 net/http 实现 OpenAI 兼容流式客户端；base URL、API key、模型名从环境变量或 `~/.k8s-seance/config.yaml` 读，不预设厂商；超时与重试
     - _Requirements: 6.1_
