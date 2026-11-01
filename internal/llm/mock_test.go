@@ -365,3 +365,142 @@ func TestMockStreamNilOnDelta(t *testing.T) {
 		t.Error("want error for nil onDelta")
 	}
 }
+
+func TestMockOpeningMentionsDeathTime(t *testing.T) {
+	tests := []struct {
+		name      string
+		deathTime string
+		want      string
+	}{
+		{"known time is stated", "2026-10-31 20:15:03 UTC", "我死于 2026-10-31 20:15:03 UTC"},
+		{"unknown time is not stated", "", "我死于"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := ChatRequest{
+				Messages:  userMsg("请做开场陈述。"),
+				Cause:     autopsy.CauseOOMKilled,
+				Evidence:  testEvidence(),
+				Purpose:   PurposeOpening,
+				DeathTime: tt.deathTime,
+			}
+			text := mockText(req)
+			if tt.deathTime == "" {
+				if strings.Contains(text, tt.want) {
+					t.Errorf("text %q should not mention a death time", text)
+				}
+				return
+			}
+			if !strings.Contains(text, tt.want) {
+				t.Errorf("text %q, want it to contain %q", text, tt.want)
+			}
+			if !strings.Contains(text, "[E") {
+				t.Errorf("opening %q has no [E#]", text)
+			}
+		})
+	}
+}
+
+func TestMockChatReplies(t *testing.T) {
+	tests := []struct {
+		name      string
+		cause     autopsy.CauseOfDeath
+		question  string
+		deathTime string
+		contains  []string
+		absent    []string
+		cites     int // exact number of [E#] citations, 0 means at least one
+	}{
+		{
+			name: "zh fix on OOM mentions memory limit", cause: autopsy.CauseOOMKilled, question: "怎么修？",
+			contains: []string{"memory limit", "[E1]"}, absent: []string{"我死于"},
+		},
+		{
+			name: "en fix on CrashLoop reads previous logs", cause: autopsy.CauseCrashLoopBackOff, question: "How do I solve this?",
+			contains: []string{"kubectl logs --previous", "Evidence:"},
+		},
+		{
+			name: "fix advice never claims an action", cause: autopsy.CauseProbeFailure, question: "怎么办",
+			contains: []string{"探针", "initialDelaySeconds"}, absent: []string{"我已经"},
+		},
+		{
+			name: "cause question restates cause with two citations", cause: autopsy.CauseOOMKilled, question: "为什么死的？",
+			contains: []string{"我的死因是 OOMKilled"}, cites: 2,
+		},
+		{
+			name: "English cause question", cause: autopsy.CauseOOMKilled, question: "How did you die?",
+			contains: []string{"My cause of death is OOMKilled"}, cites: 2,
+		},
+		{
+			name: "time question adds death time", cause: autopsy.CauseOOMKilled, question: "什么时候死的？",
+			deathTime: "2026-10-31 20:15:03 UTC", contains: []string{"我死于 2026-10-31 20:15:03 UTC"},
+		},
+		{
+			name: "time question without known time", cause: autopsy.CauseOOMKilled, question: "什么时候死的？",
+			absent: []string{"我死于"},
+		},
+		{
+			name: "unrelated zh question", cause: autopsy.CauseOOMKilled, question: "你昨天晚饭吃了什么？",
+			contains: []string{"冥界没有留下记录。", "[E"},
+		},
+		{
+			name: "unrelated en question is English", cause: autopsy.CauseOOMKilled, question: "What is your favourite colour?",
+			contains: []string{"The underworld kept no record of that.", "[E"}, absent: []string{"冥界"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := ChatRequest{
+				Messages:  []Message{{Role: "user", Content: tt.question}},
+				Cause:     tt.cause,
+				Evidence:  testEvidence(),
+				Purpose:   PurposeChat,
+				DeathTime: tt.deathTime,
+			}
+			text := mockText(req)
+			for _, s := range tt.contains {
+				if !strings.Contains(text, s) {
+					t.Errorf("reply %q, want it to contain %q", text, s)
+				}
+			}
+			for _, s := range tt.absent {
+				if strings.Contains(text, s) {
+					t.Errorf("reply %q, want it to not contain %q", text, s)
+				}
+			}
+			if n := strings.Count(text, "[E"); n == 0 || (tt.cites != 0 && n != tt.cites) {
+				t.Errorf("reply %q has %d citations, want %d (0 means at least one)", text, n, tt.cites)
+			}
+		})
+	}
+}
+
+func TestMockChatUsesLanguageOfLastQuestion(t *testing.T) {
+	req := ChatRequest{
+		Messages: []Message{
+			{Role: "user", Content: "How did you die?"},
+			{Role: "assistant", Content: "My cause of death is OOMKilled."},
+			{Role: "user", Content: "怎么修？"},
+		},
+		Cause:    autopsy.CauseOOMKilled,
+		Evidence: testEvidence(),
+		Purpose:  PurposeChat,
+	}
+	if text := mockText(req); !strings.Contains(text, "内存") {
+		t.Errorf("reply %q, want Chinese because the last question is Chinese", text)
+	}
+}
+
+func TestMockPostmortemPurposeUsesOpeningText(t *testing.T) {
+	req := ChatRequest{
+		Messages:  userMsg("summarise"),
+		Cause:     autopsy.CauseOOMKilled,
+		Evidence:  testEvidence(),
+		Purpose:   PurposePostmortem,
+		DeathTime: "2026-10-31 20:15:03 UTC",
+	}
+	want := ChatRequest{Messages: req.Messages, Cause: req.Cause, Evidence: req.Evidence, Purpose: PurposeOpening, DeathTime: req.DeathTime}
+	if got, exp := mockText(req), mockText(want); got != exp {
+		t.Errorf("postmortem text %q, want opening text %q", got, exp)
+	}
+}

@@ -16,6 +16,13 @@ type Message struct {
 	Content string
 }
 
+// Purpose values for ChatRequest.Purpose.
+const (
+	PurposeOpening    = "opening"
+	PurposeChat       = "chat"
+	PurposePostmortem = "postmortem"
+)
+
 // ChatRequest is the input for one spirit turn.
 type ChatRequest struct {
 	Messages  []Message
@@ -28,6 +35,11 @@ type ChatRequest struct {
 	// TurnIndex is 0 for the opening and 1.. for follow-ups. The postmortem
 	// generator uses its own index set by its caller.
 	TurnIndex int
+	// Purpose is PurposeOpening, PurposeChat or PurposePostmortem. Empty means
+	// an older caller that did not set it.
+	Purpose string
+	// DeathTime is the formatted time of death, or empty when it is unknown.
+	DeathTime string
 }
 
 // Usage holds the token counts of one call. The mock provider reports rough rune counts.
