@@ -55,7 +55,7 @@
     - _Requirements: 6.3_
 
 - [ ] 7. Web 界面（`internal/web`：net/http + html/template + htmx）
-  - [ ] 7.1 亡灵列表页：死因徽章、命名空间切换、连接错误与样例模式入口
+  - [x] 7.1 亡灵列表页：死因徽章、命名空间切换、连接错误与样例模式入口
     - _Requirements: 1.2, 1.3, 1.4_
   - [ ] 7.2 降灵会页：SSE 流式聊天、证据卡片展开、修复建议
     - _Requirements: 4.2, 4.3, 4.5_

@@ -1,0 +1,20 @@
+/* Placeholder styles for task 7.1. The dark theme and candle effects come in task 7.4. */
+body {
+  margin: 0;
+  font-family: system-ui, sans-serif;
+  background: #15151b;
+  color: #e6e6ea;
+}
+.topbar { display: flex; gap: 1.5rem; align-items: center; padding: 0.75rem 1.25rem; border-bottom: 1px solid #2a2a33; }
+.topbar a { color: #b9a6ff; }
+main { padding: 1rem 1.25rem; }
+.banner { padding: 0.5rem 0.75rem; margin-bottom: 1rem; border: 1px solid #6b5a1e; background: #2b2410; }
+.notice { padding: 0.75rem; margin: 1rem 0; border: 1px solid #6b2a2a; background: #2b1515; }
+table { border-collapse: collapse; width: 100%; }
+th, td { text-align: left; padding: 0.4rem 0.6rem; border-bottom: 1px solid #2a2a33; }
+.badge { display: inline-block; padding: 0.1rem 0.5rem; border-radius: 0.25rem; background: #3a3a46; }
+.badge-oomkilled { background: #5a1e5a; }
+.badge-crashloopbackoff { background: #5a3a1e; }
+.badge-imagepullbackoff { background: #1e3a5a; }
+.badge-probefailure { background: #4a4a1e; }
+.badge-error, .badge-unknown { background: #3a3a46; }

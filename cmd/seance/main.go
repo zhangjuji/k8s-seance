@@ -1,10 +1,16 @@
-// Command seance summons dead Pods and prints how they died.
+// Command seance serves the spirit list in a local Web UI, or prints autopsies
+// to stdout with the summon subcommand.
 //
-// Usage: seance [-n namespace] [-kubeconfig path] [-pod name] [-tail 200] [-fixtures] [-replay | -mock]
+// Usage:
+//
+//	seance [-addr localhost:6660] [-n namespace] [-kubeconfig path] [-tail 200] [-fixtures] [-replay | -mock]
+//	seance summon [-n namespace] [-kubeconfig path] [-pod name] [-tail 200] [-fixtures] [-replay | -mock]
 //
 // The command is read-only: it only lists and gets Pods, reads their logs and
-// lists Events. With -fixtures it reads the embedded recordings and never
-// touches a cluster. With SEANCE_RECORD=1 it also writes each collected Pod to
+// lists Events. With -fixtures it reads the embedded recordings, never loads a
+// kubeconfig and never touches a cluster. If the cluster cannot be set up at
+// startup, the web UI still starts and shows the reason with a link to fixture mode.
+// With SEANCE_RECORD=1 the summon subcommand also writes each collected Pod to
 // a local fixture file (SEANCE_FIXTURES_DIR, default "fixtures"). The spirit's
 // opening line comes from the LLM provider: -replay uses the recorded replies,
 // -mock uses the template, and otherwise SEANCE_LLM_MODE or the config decide.
@@ -18,19 +24,136 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log"
+	"net"
+	"net/http"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
+	"time"
 
 	"github.com/zhangjuji/k8s-seance/fixtures"
 	"github.com/zhangjuji/k8s-seance/internal/autopsy"
 	"github.com/zhangjuji/k8s-seance/internal/k8s"
 	"github.com/zhangjuji/k8s-seance/internal/llm"
+	"github.com/zhangjuji/k8s-seance/internal/web"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
+// shutdownTimeout bounds how long in-flight requests get after SIGINT or SIGTERM.
+const shutdownTimeout = 5 * time.Second
+
+// errFixturesOnly is the reason the cluster is unavailable in --fixtures mode.
+var errFixturesOnly = errors.New("fixtures-only mode (--fixtures) does not connect to a cluster")
+
 func main() {
+	args := os.Args[1:]
+	var err error
+	if len(args) > 0 && args[0] == "summon" {
+		err = runSummon(args[1:])
+	} else {
+		err = runServe(args)
+	}
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "seance:", err)
+		os.Exit(1)
+	}
+}
+
+// runServe starts the Web UI. It does not load a kubeconfig in --fixtures mode.
+// Otherwise a failed clientset build is logged once and the UI starts without a cluster.
+func runServe(args []string) error {
 	fs := flag.NewFlagSet("seance", flag.ExitOnError)
+	addr := fs.String("addr", "localhost:6660", "listen address")
+	namespace := fs.String("n", "default", "default namespace")
+	kubeconfig := fs.String("kubeconfig", "", "kubeconfig path (default: $KUBECONFIG or ~/.kube/config)")
+	tail := fs.Int("tail", 200, "log lines kept per container")
+	useFixtures := fs.Bool("fixtures", false, "offline: show the recorded fixture spirits, no cluster access")
+	useReplay := fs.Bool("replay", false, "LLM replies from fixtures/replay (falls back to mock per turn)")
+	useMock := fs.Bool("mock", false, "LLM replies from the built-in template, no API calls")
+	fs.Usage = func() {
+		fmt.Fprintf(fs.Output(), "Usage: seance [-addr localhost:6660] [-n namespace] [-kubeconfig path] [-tail 200] [-fixtures] [-replay | -mock]\n       seance summon [flags]   print autopsies to stdout\n\n")
+		fs.PrintDefaults()
+	}
+	_ = fs.Parse(args) // ExitOnError: bad flags exit with status 2, -h with 0.
+
+	mode, err := selectMode(*useReplay, *useMock)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "seance:", err)
+		os.Exit(2)
+	}
+	logger := log.New(os.Stderr, "seance: ", 0)
+	provider := buildProvider(mode, os.Stderr)
+	cluster, clusterErr := openCluster(*useFixtures, *kubeconfig, *tail, logger)
+	cfg, _ := llm.LoadConfig() // buildProvider already reported any config problem
+
+	srv, err := web.New(web.Options{
+		Cluster:          cluster,
+		ClusterErr:       clusterErr,
+		DefaultNamespace: *namespace,
+		FixturesOnly:     *useFixtures,
+		Provider:         provider,
+		Limits:           llm.LimitsFromEnv(),
+		Model:            cfg.Model,
+		Logger:           logger,
+	})
+	if err != nil {
+		return err
+	}
+	return serveHTTP(*addr, srv.Handler(), logger)
+}
+
+// openCluster returns the cluster source, or nil with the reason it is unavailable.
+// It only reads the kubeconfig and builds a client. It makes no API request.
+func openCluster(fixturesOnly bool, kubeconfig string, tail int, logger *log.Logger) (web.Source, error) {
+	if fixturesOnly {
+		return nil, errFixturesOnly
+	}
+	cs, err := newClientset(kubeconfig)
+	if err != nil {
+		logger.Printf("warning: no cluster connection, the UI will show the reason: %v", err)
+		return nil, err
+	}
+	return web.ClusterSource{Client: cs, Tail: tail}, nil
+}
+
+// serveHTTP listens on addr and serves handler until SIGINT or SIGTERM, then shuts down gracefully.
+func serveHTTP(addr string, handler http.Handler, logger *log.Logger) error {
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		return fmt.Errorf("listen on %s: %w", addr, err)
+	}
+	srv := &http.Server{Handler: handler, ReadHeaderTimeout: 10 * time.Second}
+	logger.Printf("listening on http://%s (Ctrl+C to stop)", ln.Addr())
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	serveErr := make(chan error, 1)
+	go func() { serveErr <- srv.Serve(ln) }()
+
+	select {
+	case err := <-serveErr:
+		return err
+	case <-ctx.Done():
+	}
+	logger.Println("shutting down")
+	shutCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	defer cancel()
+	if err := srv.Shutdown(shutCtx); err != nil {
+		return fmt.Errorf("shutdown: %w", err)
+	}
+	if err := <-serveErr; err != nil && !errors.Is(err, http.ErrServerClosed) {
+		return err
+	}
+	return nil
+}
+
+// runSummon is the previous text output: it prints each autopsy and its opening line.
+func runSummon(args []string) error {
+	fs := flag.NewFlagSet("seance summon", flag.ExitOnError)
 	namespace := fs.String("n", "default", "namespace to search")
 	kubeconfig := fs.String("kubeconfig", "", "kubeconfig path (default: $KUBECONFIG or ~/.kube/config)")
 	pod := fs.String("pod", "", "summon only this pod")
@@ -39,10 +162,10 @@ func main() {
 	useReplay := fs.Bool("replay", false, "LLM replies from fixtures/replay (falls back to mock per turn)")
 	useMock := fs.Bool("mock", false, "LLM replies from the built-in template, no API calls")
 	fs.Usage = func() {
-		fmt.Fprintf(fs.Output(), "Usage: seance [-n namespace] [-kubeconfig path] [-pod name] [-tail 200] [-fixtures] [-replay | -mock]\n\n")
+		fmt.Fprintf(fs.Output(), "Usage: seance summon [-n namespace] [-kubeconfig path] [-pod name] [-tail 200] [-fixtures] [-replay | -mock]\n\n")
 		fs.PrintDefaults()
 	}
-	_ = fs.Parse(os.Args[1:]) // ExitOnError: bad flags exit with status 2, -h with 0.
+	_ = fs.Parse(args)
 
 	mode, err := selectMode(*useReplay, *useMock)
 	if err != nil {
@@ -52,14 +175,9 @@ func main() {
 	provider := buildProvider(mode, os.Stderr)
 
 	if *useFixtures {
-		err = runFixtures(context.Background(), *pod, *tail, provider, os.Stdout)
-	} else {
-		err = run(context.Background(), *namespace, *kubeconfig, *pod, *tail, provider, os.Stdout)
+		return runFixtures(context.Background(), *pod, *tail, provider, os.Stdout)
 	}
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "seance:", err)
-		os.Exit(1)
-	}
+	return run(context.Background(), *namespace, *kubeconfig, *pod, *tail, provider, os.Stdout)
 }
 
 // selectMode returns the LLM mode named by the flags. Without a flag it returns
@@ -96,17 +214,27 @@ func buildProvider(mode string, errOut io.Writer) llm.Provider {
 
 // run loads the kubeconfig, builds a clientset and summons the spirits.
 func run(ctx context.Context, namespace, kubeconfig, pod string, tail int, provider llm.Provider, out io.Writer) error {
+	cs, err := newClientset(kubeconfig)
+	if err != nil {
+		return err
+	}
+	return summon(ctx, cs, namespace, pod, tail, recorderFromEnv(os.Stderr), provider, out)
+}
+
+// newClientset loads the kubeconfig and builds a client. It makes no request to the API server.
+// An empty kubeconfig means the default rules: $KUBECONFIG, then ~/.kube/config.
+func newClientset(kubeconfig string) (kubernetes.Interface, error) {
 	rules := clientcmd.NewDefaultClientConfigLoadingRules()
-	rules.ExplicitPath = kubeconfig // empty keeps the default rules ($KUBECONFIG, ~/.kube/config)
+	rules.ExplicitPath = kubeconfig
 	cfg, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(rules, &clientcmd.ConfigOverrides{}).ClientConfig()
 	if err != nil {
-		return fmt.Errorf("load kubeconfig: %w", err)
+		return nil, fmt.Errorf("load kubeconfig: %w", err)
 	}
 	cs, err := kubernetes.NewForConfig(cfg)
 	if err != nil {
-		return fmt.Errorf("build clientset: %w", err)
+		return nil, fmt.Errorf("build clientset: %w", err)
 	}
-	return summon(ctx, cs, namespace, pod, tail, recorderFromEnv(os.Stderr), provider, out)
+	return cs, nil
 }
 
 // runFixtures prints the embedded recordings. It never loads a kubeconfig.
