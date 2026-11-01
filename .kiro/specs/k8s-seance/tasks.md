@@ -33,7 +33,7 @@
     - _Requirements: 7.4_
   - [x] 4.2 `internal/llm/client.go`：`HTTPProvider`，用 net/http 实现 OpenAI 兼容流式客户端；base URL、API key、模型名从环境变量或 `~/.k8s-seance/config.yaml` 读，不预设厂商；超时与重试
     - _Requirements: 6.1_
-  - [ ] 4.3 `internal/llm/budget.go`：调用次数 / token 上限、开场白缓存、超限台词
+  - [x] 4.3 `internal/llm/budget.go`：调用次数 / token 上限、开场白缓存、超限台词
     - _Requirements: 6.2, 6.3_
   - [ ] 4.4 `internal/llm/replay.go`：`ReplayProvider`，录制与回放，缺录音时退回 mock
     - _Requirements: 7.2, 7.3, 7.5_
