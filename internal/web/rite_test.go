@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"path/filepath"
 	"slices"
@@ -121,10 +122,36 @@ func (r castRig) summon(t *testing.T, src string) string {
 	return res.ID
 }
 
+// castHost is the loopback Host a browser on the same machine sends; the cast
+// and vitals handlers refuse any other Host (DNS rebinding).
+const castHost = "127.0.0.1:6660"
+
+// sendHost is send with an explicit Host header.
+func sendHost(t *testing.T, srv *Server, host, method, target, contentType, body string, headers map[string]string) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest(method, target, strings.NewReader(body))
+	req.Host = host
+	if contentType != "" {
+		req.Header.Set("Content-Type", contentType)
+	}
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	return rec
+}
+
+// sendCast sends a cast or vitals request from the loopback Host.
+func sendCast(t *testing.T, srv *Server, method, target, contentType, body string, headers map[string]string) *httptest.ResponseRecorder {
+	t.Helper()
+	return sendHost(t, srv, castHost, method, target, contentType, body, headers)
+}
+
 func castJSON(t *testing.T, srv *Server, id string, body map[string]any, headers map[string]string) (int, castReply, string) {
 	t.Helper()
 	data, _ := json.Marshal(body)
-	rec := send(t, srv, http.MethodPost, "/api/seances/"+id+"/cast", "application/json", string(data), headers)
+	rec := sendCast(t, srv, http.MethodPost, "/api/seances/"+id+"/cast", "application/json", string(data), headers)
 	var rep castReply
 	_ = json.Unmarshal(rec.Body.Bytes(), &rep)
 	return rec.Code, rep, rec.Body.String()
@@ -146,7 +173,7 @@ func TestCastOffByDefault(t *testing.T) {
 	if code != http.StatusForbidden || !strings.Contains(body, "--allow-resurrect") {
 		t.Errorf("cast without --allow-resurrect: %d %s", code, body)
 	}
-	if rec := send(t, srv, http.MethodGet, "/api/seances/"+id+"/vitals?since=1", "", "", nil); rec.Code != http.StatusForbidden {
+	if rec := sendCast(t, srv, http.MethodGet, "/api/seances/"+id+"/vitals?since=1", "", "", nil); rec.Code != http.StatusForbidden {
 		t.Errorf("vitals without --allow-resurrect: %d", rec.Code)
 	}
 	html := send(t, srv, http.MethodGet, "/api/seances/"+id+"/spell?lang=en", "", "", map[string]string{"HX-Request": "true"}).Body.String()
@@ -246,17 +273,17 @@ func TestCastFormPostWithHTMX(t *testing.T) {
 	rig := newCastRig(t, "memory-glutton", nil, gluttonDeployment())
 	id := rig.summon(t, "")
 	hx := map[string]string{"HX-Request": "true", "Accept-Language": "en"}
-	rec := send(t, rig.srv, http.MethodPost, "/api/seances/"+id+"/cast", "application/x-www-form-urlencoded", "mode=dry", hx)
+	rec := sendCast(t, rig.srv, http.MethodPost, "/api/seances/"+id+"/cast", "application/x-www-form-urlencoded", "mode=dry", hx)
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "Rehearsal passed") || !strings.Contains(rec.Body.String(), "dryRun=All") {
 		t.Fatalf("htmx rehearsal: %d %s", rec.Code, rec.Body)
 	}
-	rec = send(t, rig.srv, http.MethodPost, "/api/seances/"+id+"/cast", "application/x-www-form-urlencoded", "mode=cast&confirm=yes", hx)
+	rec = sendCast(t, rig.srv, http.MethodPost, "/api/seances/"+id+"/cast", "application/x-www-form-urlencoded", "mode=cast&confirm=yes", hx)
 	body := rec.Body.String()
 	if rec.Code != http.StatusOK || !strings.Contains(body, "Cast done") || !strings.Contains(body, `hx-trigger="load delay:3s"`) || !strings.Contains(body, "/vitals?since=") {
 		t.Fatalf("htmx cast: %d %s", rec.Code, body)
 	}
 	// An htmx refusal is an error fragment with the 4xx status.
-	rec = send(t, rig.srv, http.MethodPost, "/api/seances/"+id+"/cast", "application/x-www-form-urlencoded", "mode=cast&confirm=yes", hx)
+	rec = sendCast(t, rig.srv, http.MethodPost, "/api/seances/"+id+"/cast", "application/x-www-form-urlencoded", "mode=cast&confirm=yes", hx)
 	if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), `class="cast-error"`) {
 		t.Errorf("htmx refusal: %d %s", rec.Code, rec.Body)
 	}
@@ -274,11 +301,53 @@ func TestCastRefusesCrossSite(t *testing.T) {
 			t.Errorf("%v: %d %s", h, code, body)
 		}
 	}
-	if code, _, _ := castJSON(t, rig.srv, id, map[string]any{"mode": "dry"}, map[string]string{"Origin": "http://example.com", "Sec-Fetch-Site": "same-origin"}); code != http.StatusOK {
+	if code, _, _ := castJSON(t, rig.srv, id, map[string]any{"mode": "dry"}, map[string]string{"Origin": "http://" + castHost, "Sec-Fetch-Site": "same-origin"}); code != http.StatusOK {
 		t.Errorf("same-origin rehearsal: %d", code)
 	}
 	if n := len(writeActions(rig.cs)); n != 1 {
 		t.Errorf("writes = %d, want only the same-origin rehearsal", n)
+	}
+}
+
+func TestCastRefusesNonLoopbackHost(t *testing.T) {
+	rebound := map[string]string{"Origin": "http://attacker.example:6660", "Sec-Fetch-Site": "same-origin"}
+	for _, tc := range []struct {
+		name, method, path, contentType, body string
+	}{
+		{"cast", http.MethodPost, "/cast", "application/json", `{"mode":"dry"}`},
+		{"vitals", http.MethodGet, "/vitals?since=1", "", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rig := newCastRig(t, "memory-glutton", nil, gluttonDeployment())
+			id := rig.summon(t, "")
+			rec := sendHost(t, rig.srv, "attacker.example:6660", tc.method, "/api/seances/"+id+tc.path, tc.contentType, tc.body, rebound)
+			if rec.Code != http.StatusForbidden {
+				t.Errorf("rebound Host: %d %s", rec.Code, rec.Body)
+			}
+			if n := len(writeActions(rig.cs)); n != 0 {
+				t.Errorf("writes = %d, want 0", n)
+			}
+		})
+	}
+}
+
+func TestLoopbackHost(t *testing.T) {
+	for host, want := range map[string]bool{
+		"localhost:6660":        true,
+		"LOCALHOST":             true,
+		"127.0.0.1:6660":        true,
+		"127.0.0.2":             true,
+		"[::1]:6660":            true,
+		"[::1]":                 true,
+		"::1":                   true,
+		"example.com":           false,
+		"attacker.example:6660": false,
+		"0.0.0.0:6660":          false,
+		"":                      false,
+	} {
+		if got := loopbackHost(host); got != want {
+			t.Errorf("loopbackHost(%q) = %v, want %v", host, got, want)
+		}
 	}
 }
 
@@ -352,7 +421,7 @@ func TestVitalsAfterCastMarksTheAltar(t *testing.T) {
 	}
 
 	// Nothing has come back yet: the page keeps polling.
-	rec := send(t, rig.srv, http.MethodGet, rep.Vitals, "", "", map[string]string{"HX-Request": "true", "Accept-Language": "en"})
+	rec := sendCast(t, rig.srv, http.MethodGet, rep.Vitals, "", "", map[string]string{"HX-Request": "true", "Accept-Language": "en"})
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `data-state="waiting"`) || !strings.Contains(rec.Body.String(), `hx-trigger="load delay:3s"`) {
 		t.Fatalf("waiting vitals: %d %s", rec.Code, rec.Body)
 	}
@@ -361,7 +430,7 @@ func TestVitalsAfterCastMarksTheAltar(t *testing.T) {
 	if _, err := rig.cs.CoreV1().Pods(castNS).Create(context.Background(), livingPod("memory-glutton-5f5b7d9c8d-new01", now.Add(2*time.Second), now.Add(-30*time.Second)), metav1.CreateOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	rec = send(t, rig.srv, http.MethodGet, rep.Vitals, "", "", map[string]string{"Accept": "application/json"})
+	rec = sendCast(t, rig.srv, http.MethodGet, rep.Vitals, "", "", map[string]string{"Accept": "application/json"})
 	var v vitalsView
 	decodeJSON(t, rec.Body.Bytes(), &v)
 	if v.State != "revived" || v.AltarURL != tombstoneURL(tomb.ID) {
@@ -386,7 +455,7 @@ func TestVitalsWithoutACastDoesNotMarkTheAltar(t *testing.T) {
 	id := rig.summon(t, "")
 	tomb, _ := rig.grave.Bury(graveyard.Tombstone{Namespace: rig.a.Namespace, PodName: rig.a.Name, UID: rig.a.UID})
 	since := time.Now().Add(-time.Minute).Unix()
-	rec := send(t, rig.srv, http.MethodGet, fmt.Sprintf("/api/seances/%s/vitals?since=%d", id, since), "", "", map[string]string{"Accept": "application/json"})
+	rec := sendCast(t, rig.srv, http.MethodGet, fmt.Sprintf("/api/seances/%s/vitals?since=%d", id, since), "", "", map[string]string{"Accept": "application/json"})
 	var v vitalsView
 	decodeJSON(t, rec.Body.Bytes(), &v)
 	if v.State != "revived" || v.AltarURL != "" {
@@ -396,7 +465,7 @@ func TestVitalsWithoutACastDoesNotMarkTheAltar(t *testing.T) {
 		t.Error("a vitals check without a cast marked the altar")
 	}
 	for _, q := range []string{"", "since=abc", "since=-5", "since=" + url.QueryEscape(fmt.Sprint(time.Now().Add(time.Hour).Unix()))} {
-		if rec := send(t, rig.srv, http.MethodGet, "/api/seances/"+id+"/vitals?"+q, "", "", nil); rec.Code != http.StatusBadRequest {
+		if rec := sendCast(t, rig.srv, http.MethodGet, "/api/seances/"+id+"/vitals?"+q, "", "", nil); rec.Code != http.StatusBadRequest {
 			t.Errorf("vitals?%s: %d", q, rec.Code)
 		}
 	}
@@ -411,7 +480,7 @@ func TestVitalsStopsPollingAfterTheWindow(t *testing.T) {
 	rig := newCastRig(t, "memory-glutton", nil)
 	id := rig.summon(t, "")
 	since := time.Now().Add(-5 * time.Minute).Unix()
-	rec := send(t, rig.srv, http.MethodGet, fmt.Sprintf("/api/seances/%s/vitals?since=%d", id, since), "", "", map[string]string{"HX-Request": "true", "Accept-Language": "en"})
+	rec := sendCast(t, rig.srv, http.MethodGet, fmt.Sprintf("/api/seances/%s/vitals?since=%d", id, since), "", "", map[string]string{"HX-Request": "true", "Accept-Language": "en"})
 	body := rec.Body.String()
 	if rec.Code != http.StatusOK || strings.Contains(body, "hx-get") || !strings.Contains(body, "within 4 minutes") {
 		t.Errorf("vitals after the window: %d %s", rec.Code, body)

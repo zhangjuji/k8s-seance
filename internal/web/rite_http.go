@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"slices"
@@ -158,6 +159,23 @@ func sameOrigin(r *http.Request) bool {
 	return err == nil && u.Host == r.Host
 }
 
+// loopbackHost reports whether a Host header names a loopback address. The
+// Origin check alone does not stop DNS rebinding: a page whose name resolves
+// to 127.0.0.1 sends a matching Host and Origin of its own name.
+func loopbackHost(host string) bool {
+	h := host
+	if hh, _, err := net.SplitHostPort(host); err == nil {
+		h = hh
+	} else if strings.HasPrefix(h, "[") && strings.HasSuffix(h, "]") {
+		h = h[1 : len(h)-1]
+	}
+	if strings.EqualFold(h, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(h)
+	return ip != nil && ip.IsLoopback()
+}
+
 // handleCast rehearses or casts the spell of a séance. Every check below must
 // pass before internal/rite is called; any failure is a 4xx and no request
 // reaches the cluster.
@@ -165,6 +183,10 @@ func (s *Server) handleCast(w http.ResponseWriter, r *http.Request) {
 	lang := s.requestLang(r)
 	if s.opts.Resurrect == nil {
 		s.castFail(w, r, http.StatusForbidden, tr(lang, "cast_off"))
+		return
+	}
+	if !loopbackHost(r.Host) {
+		s.castFail(w, r, http.StatusForbidden, tr(lang, "cast_cross_site"))
 		return
 	}
 	if !sameOrigin(r) {
@@ -334,6 +356,10 @@ func (s *Server) handleVitals(w http.ResponseWriter, r *http.Request) {
 	lang := s.requestLang(r)
 	if s.opts.Resurrect == nil {
 		s.castFail(w, r, http.StatusForbidden, tr(lang, "cast_off"))
+		return
+	}
+	if !loopbackHost(r.Host) {
+		s.castFail(w, r, http.StatusForbidden, tr(lang, "cast_cross_site"))
 		return
 	}
 	se := s.seanceFor(w, r)
