@@ -215,6 +215,17 @@ func (s *Session) BudgetRemaining() int {
 	return s.budget.Remaining()
 }
 
+// InputTokensUsed returns the estimated input tokens this session has spent
+// against its total input limit.
+func (s *Session) InputTokensUsed() int {
+	return s.budget.InputUsed()
+}
+
+// InputTokensMax returns the session's total input limit in estimated tokens.
+func (s *Session) InputTokensMax() int {
+	return s.budget.Limits().MaxTotalInputTokens
+}
+
 // Exhausted reports whether this session has no calls left.
 func (s *Session) Exhausted() bool {
 	return s.budget.Exhausted()

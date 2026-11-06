@@ -106,7 +106,7 @@ func BuildEvidence(a *PodAutopsy, opts EvidenceOptions) ([]Evidence, error)
 - 超时 15 秒，失败重试 1 次（见 Error Handling）。
 - 成本控制：
   - 证据包代替原始日志；对话历史只保留最近 4 轮 + 证据。
-  - `budget.go`：每个 séance 默认最多 6 次调用、单次输入 ≤ 6k token；聊天调用（开场白、追问）输出 ≤ 400 token，复盘调用（`TurnIndex == PostmortemTurnIndex`）输出 ≤ 1500 token，复盘也只算一次调用。超限返回固定台词。
+  - `budget.go`：每个 séance 默认最多 6 次调用、单次输入 ≤ 6k token、整场输入合计 ≤ 30k token（每次调用按估算值与供应商报告的输入 token 取较大者累计；`SEANCE_BUDGET_MAX_TOTAL_INPUT_TOKENS` 可覆盖）。单次上限取 6k 与剩余总量中较小者，超出时先丢较早的历史；只超单次上限返回 `ErrInputTooLarge`（不计数），只超剩余总量则本场额度耗尽（`ErrBudgetExhausted`，复盘走规则模板 `budget_exhausted`）。会话 JSON 带 `inputTokensUsed` 和 `inputTokensMax`；聊天调用（开场白、追问）输出 ≤ 400 token，复盘调用（`TurnIndex == PostmortemTurnIndex`）输出 ≤ 1500 token，复盘也只算一次调用。超限返回固定台词。
   - 开场白按 `(podUID, restartCount, model)` 缓存，重复召唤不重复花钱。
   - 复盘的时间线、证据小节由代码直接从 `PodAutopsy` 填，LLM 只写摘要、根因、建议和行动项。
 - `replay.go`：`--replay` 时读取 `fixtures/replay/*.json`（经 `go:embed` 打包）。开场白（turnIndex 0）和复盘（turnIndex 100）按 `turnIndex` 匹配；追问按问题文本匹配：请求的最后一条用户消息经 `normalizeQuestion` 规范化后，与录音里的 `lastUser` 比较，多条命中时取 turnIndex 最小的，请求的 turnIndex 不必与录音相同。`SEANCE_RECORD=1` 时写入。

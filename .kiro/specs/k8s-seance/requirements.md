@@ -86,7 +86,7 @@ K8s 降灵会（K8s Séance）是一个本地运行的 Web 应用：用户从集
 #### Acceptance Criteria
 
 1. THE system SHALL 通过环境变量或配置文件（`~/.k8s-seance/config.yaml`，环境变量优先）配置 LLM 的 base URL、模型名和 API key，并支持任意 OpenAI 兼容接口，不预设默认厂商。
-2. WHILE 一个降灵会进行中 the system SHALL 限制 LLM 调用次数（默认 6 次）和单次输入 token（默认 6k）。
+2. WHILE 一个降灵会进行中 the system SHALL 限制 LLM 调用次数（默认 6 次）、单次输入 token（默认 6k）和整场降灵会的输入 token 总量（默认 30k，可用 `SEANCE_BUDGET_MAX_TOTAL_INPUT_TOKENS` 配置；spec.md §7.8）。总量不够时先丢弃较早的历史，仍放不下则视为调用额度已用完（同第 3 条）。
 3. IF 达到调用上限 THEN the system SHALL 提示「仪式之力已耗尽」，并仍然允许生成复盘（使用已有回答和规则模板）。
 4. THE system SHALL 只把证据包（而不是完整日志）发送给 LLM。
 

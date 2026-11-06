@@ -64,6 +64,10 @@ type messageReply struct {
 	Exhausted       bool   `json:"exhausted"`
 	BudgetUsed      int    `json:"budgetUsed"`
 	BudgetRemaining int    `json:"budgetRemaining"`
+	// InputTokensUsed and InputTokensMax are the séance's estimated input so
+	// far and its total input limit (spec §7.8).
+	InputTokensUsed int `json:"inputTokensUsed"`
+	InputTokensMax  int `json:"inputTokensMax"`
 	// Doubts are the fact-check findings of the reply, [] when none.
 	Doubts []doubtItem `json:"doubts"`
 }
@@ -78,6 +82,8 @@ type seanceDetail struct {
 	Transcript      []transcriptItem `json:"transcript"`
 	BudgetUsed      int              `json:"budgetUsed"`
 	BudgetRemaining int              `json:"budgetRemaining"`
+	InputTokensUsed int              `json:"inputTokensUsed"`
+	InputTokensMax  int              `json:"inputTokensMax"`
 	Exhausted       bool             `json:"exhausted"`
 	Evidence        []evidenceItem   `json:"evidence"`
 	// Memory is the forgetting countdown at the time of the request
@@ -229,6 +235,8 @@ func (s *Server) handleGetSeance(w http.ResponseWriter, r *http.Request) {
 		Transcript:      transcript,
 		BudgetUsed:      used,
 		BudgetRemaining: left,
+		InputTokensUsed: se.sess.InputTokensUsed(),
+		InputTokensMax:  se.sess.InputTokensMax(),
 		Exhausted:       left == 0,
 		Evidence:        evidence,
 		Memory:          autopsy.Remember(a, se.eventTTL, memoryAsOf(a, se.now())),
@@ -351,6 +359,8 @@ func (s *Server) handleMessage(w http.ResponseWriter, r *http.Request) {
 			Exhausted:       res.exhausted,
 			BudgetUsed:      used,
 			BudgetRemaining: left,
+			InputTokensUsed: se.sess.InputTokensUsed(),
+			InputTokensMax:  se.sess.InputTokensMax(),
 			Doubts:          res.reply.Doubts,
 		})
 	default:

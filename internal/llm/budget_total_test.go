@@ -114,3 +114,12 @@ func TestLimitsFromEnvTotalInput(t *testing.T) {
 		}
 	}
 }
+
+func TestBudgetLimitsFillsDefaults(t *testing.T) {
+	got := NewBudget(&budgetCounter{}, Limits{MaxTotalInputTokens: 1234}).Limits()
+	want := DefaultLimits()
+	want.MaxTotalInputTokens = 1234
+	if got != want {
+		t.Errorf("Limits() = %+v, want %+v", got, want)
+	}
+}

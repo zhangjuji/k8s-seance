@@ -252,6 +252,11 @@ func (b *Budget) InputUsed() int {
 	return b.inputUsed
 }
 
+// Limits returns the limits in force, with defaults filled in.
+func (b *Budget) Limits() Limits {
+	return b.limits
+}
+
 // InputRemaining returns how much of MaxTotalInputTokens is left. It is never negative.
 func (b *Budget) InputRemaining() int {
 	b.mu.Lock()
