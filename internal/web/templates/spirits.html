@@ -3,6 +3,13 @@
 
   {{if .FixtureMode}}
   <div class="banner">{{Tf "fixture_banner" (len .Rows)}}</div>
+  {{else if .Live}}
+  {{/* Live mode: switching the namespace loads a whole page, so the old stream closes with it. */}}
+  <form method="get" action="/spirits">
+    <label for="ns">{{T "ns_label"}}</label>
+    <input id="ns" name="ns" type="text" value="{{.Namespace}}" autocomplete="off" required>
+    <button type="submit">{{T "ns_switch"}}</button>
+  </form>
   {{else}}
   <form method="get" action="/spirits"
         hx-get="/spirits" hx-target="#page" hx-select="#page" hx-swap="outerHTML" hx-push-url="true">
@@ -12,15 +19,31 @@
   </form>
   {{end}}
 
+  {{if .Live}}
+  <div id="bell-root" class="bell-root" hx-ext="sse" sse-connect="{{.StreamURL}}"
+       data-ns="{{.Namespace}}" data-lang="{{.UI.Lang}}">
+    <div id="bell-hook" hidden hx-trigger="sse:ready, sse:rows, sse:trouble"></div>
+    <div class="live-bar">
+      <p class="live-status" id="live-status" role="status">
+        <span class="candle" aria-hidden="true"></span>
+        <span id="live-text">{{T "bell_connecting"}}</span>
+      </p>
+      <button type="button" id="bell-sound" class="bell-sound" aria-pressed="false">{{T "bell_sound_off"}}</button>
+    </div>
+    <div id="mass" class="mass"></div>
+    <div id="bell" class="bell" aria-live="polite" aria-label="{{T "bell_aria"}}"></div>
+  </div>
+  {{end}}
+
   {{if .Notice}}
-  <div class="notice" role="alert">
+  <div class="notice" id="list-notice" role="alert">
     <p>{{.Notice}}</p>
     <p><a href="/spirits?src=fixtures">{{T "fixtures_link"}}</a></p>
   </div>
   {{end}}
 
-  {{if .Rows}}
-  <table>
+  {{if or .Rows .Live}}
+  <table id="spirit-table"{{if not .Rows}} hidden{{end}}>
     <thead>
       <tr>
         <th>{{T "col_name"}}</th>
@@ -31,9 +54,169 @@
         <th></th>
       </tr>
     </thead>
-    <tbody>
-    {{range .Rows}}
-      <tr>
+    <tbody id="spirit-rows">{{template "spirit_rows" .}}</tbody>
+  </table>
+  {{end}}
+  {{if not .Rows}}{{if or .Live (not .Notice)}}
+  <p id="no-spirits"{{if .Notice}} hidden{{end}}>{{T "no_spirits"}}</p>
+  {{end}}{{end}}
+</section>
+{{if .Live}}
+<script src="/static/sse.js" defer></script>
+<script>
+(function () {
+  var root = document.getElementById('bell-root');
+  var bell = document.getElementById('bell');
+  var mass = document.getElementById('mass');
+  var liveText = document.getElementById('live-text');
+  var soundBtn = document.getElementById('bell-sound');
+  var text = {
+    ready: {{T "bell_ready"}},
+    trouble: {{T "bell_trouble"}},
+    summon: {{T "bell_summon_now"}},
+    dismiss: {{T "bell_dismiss"}},
+    soundOn: {{T "bell_sound_on"}},
+    soundOff: {{T "bell_sound_off"}},
+    massPods: {{T "mass_pods"}}
+  };
+  var maxNotices = 8;
+
+  function status(msg, troubled) {
+    liveText.textContent = msg;
+    root.classList.toggle('troubled', !!troubled);
+  }
+
+  function el(tag, cls, content) {
+    var e = document.createElement(tag);
+    if (cls) { e.className = cls; }
+    if (content) { e.textContent = content; }
+    return e;
+  }
+
+  // summonForm posts to /api/seances like the summon button of a row.
+  function summonForm(sp) {
+    var f = el('form');
+    f.method = 'post';
+    f.action = '/api/seances';
+    var fields = { ns: sp.namespace, pod: sp.name, src: 'cluster', lang: root.getAttribute('data-lang') };
+    for (var k in fields) {
+      var i = el('input');
+      i.type = 'hidden';
+      i.name = k;
+      i.value = fields[k];
+      f.appendChild(i);
+    }
+    var b = el('button', 'summon-now', text.summon);
+    b.type = 'submit';
+    f.appendChild(b);
+    return f;
+  }
+
+  function notice(sp, kind) {
+    var item = el('div', 'bell-item bell-' + kind);
+    item.appendChild(el('p', 'bell-text', sp.text));
+    var actions = el('div', 'bell-actions');
+    actions.appendChild(summonForm(sp));
+    var x = el('button', 'bell-dismiss', text.dismiss);
+    x.type = 'button';
+    x.addEventListener('click', function () { item.remove(); });
+    actions.appendChild(x);
+    item.appendChild(actions);
+    bell.insertBefore(item, bell.firstChild);
+    while (bell.children.length > maxNotices) { bell.lastChild.remove(); }
+  }
+
+  function massCard(m) {
+    var old = mass.querySelector('[data-cause="' + m.cause.replace(/[^A-Za-z]/g, '') + '"]');
+    if (old) { old.remove(); }
+    var card = el('section', 'mass-grave');
+    card.setAttribute('data-cause', m.cause.replace(/[^A-Za-z]/g, ''));
+    card.appendChild(el('h2', '', m.title));
+    card.appendChild(el('p', 'mass-pods-label', text.massPods));
+    var ul = el('ul');
+    m.pods.forEach(function (p) { ul.appendChild(el('li', '', p)); });
+    card.appendChild(ul);
+    card.appendChild(el('p', 'mass-hint', m.hint));
+    var x = el('button', 'bell-dismiss', text.dismiss);
+    x.type = 'button';
+    x.addEventListener('click', function () { card.remove(); });
+    card.appendChild(x);
+    mass.insertBefore(card, mass.firstChild);
+  }
+
+  // The bell is synthesised with Web Audio: no audio file is loaded. It stays
+  // silent until the user turns it on, because browsers only allow sound after a click.
+  var audio = null;
+  var soundOn = false;
+  function strike(at) {
+    [[660, 0.18], [1822, 0.06]].forEach(function (p) {
+      var osc = audio.createOscillator();
+      var gain = audio.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = p[0];
+      gain.gain.setValueAtTime(0.0001, at);
+      gain.gain.exponentialRampToValueAtTime(p[1], at + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, at + 1.6);
+      osc.connect(gain);
+      gain.connect(audio.destination);
+      osc.start(at);
+      osc.stop(at + 1.7);
+    });
+  }
+  function ring(times) {
+    if (!soundOn || !audio) { return; }
+    for (var i = 0; i < times; i++) { strike(audio.currentTime + 0.05 + i * 0.4); }
+  }
+  soundBtn.addEventListener('click', function () {
+    soundOn = !soundOn;
+    soundBtn.setAttribute('aria-pressed', String(soundOn));
+    soundBtn.textContent = soundOn ? text.soundOn : text.soundOff;
+    if (soundOn && !audio) {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (AC) { audio = new AC(); }
+    }
+    if (soundOn && audio) {
+      if (audio.state === 'suspended') { audio.resume(); }
+      ring(1);
+    }
+  });
+
+  document.body.addEventListener('sse:ready', function (e) {
+    status(JSON.parse(e.detail.data).text, false);
+  });
+  document.body.addEventListener('sse:trouble', function (e) {
+    status(JSON.parse(e.detail.data).text, true);
+  });
+  document.body.addEventListener('htmx:sseError', function () {
+    status(text.trouble, true);
+  });
+  document.body.addEventListener('sse:rows', function (e) {
+    var d = JSON.parse(e.detail.data);
+    status(text.ready, false);
+    // html is the table body rendered and escaped by html/template on the server.
+    document.getElementById('spirit-rows').innerHTML = d.html;
+    document.getElementById('spirit-table').hidden = d.count === 0;
+    var empty = document.getElementById('no-spirits');
+    if (empty) { empty.hidden = d.count !== 0; }
+    var listNotice = document.getElementById('list-notice');
+    if (listNotice) { listNotice.hidden = true; }
+
+    var fresh = {};
+    d.arrived.forEach(function (a) { notice(a, 'arrived'); fresh[a.name] = true; });
+    d.worse.forEach(function (w) { notice(w, 'worse'); fresh[w.name] = true; });
+    d.mass.forEach(massCard);
+    var rows = document.querySelectorAll('#spirit-rows tr[data-pod]');
+    for (var i = 0; i < rows.length; i++) {
+      if (fresh[rows[i].getAttribute('data-pod')]) { rows[i].classList.add('fresh'); }
+    }
+    if (d.mass.length) { ring(3); } else if (d.arrived.length || d.worse.length) { ring(1); }
+  });
+})();
+</script>
+{{end}}{{end}}
+
+{{define "spirit_rows"}}{{range .Rows}}
+      <tr data-pod="{{.Name}}">
         <td>{{.Name}}</td>
         <td>{{.Namespace}}</td>
         <td><span class="badge {{.BadgeClass}}">{{.Cause}}</span></td>
@@ -49,10 +232,4 @@
           </form>
         </td>
       </tr>
-    {{end}}
-    </tbody>
-  </table>
-  {{else if not .Notice}}
-  <p>{{T "no_spirits"}}</p>
-  {{end}}
-</section>{{end}}
+{{end}}{{end}}

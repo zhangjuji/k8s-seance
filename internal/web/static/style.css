@@ -418,6 +418,72 @@ tbody tr:hover { background: rgba(255, 179, 71, 0.04); }
 .tomb-epitaph { font-style: italic; color: var(--flame-soft); }
 .pm-tomb { margin-left: 0.75rem; }
 
+/* Summoning bell (live list). */
+.bell-root { margin: 0.75rem 0 1rem; }
+.live-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.live-status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.candle {
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.8rem;
+  border-radius: 50% 50% 45% 45%;
+  background: var(--flame);
+  animation: candle-flicker 2.6s ease-in-out infinite;
+}
+.bell-root.troubled .live-status { color: var(--notice-text); }
+.bell-root.troubled .candle {
+  background: var(--line-strong);
+  box-shadow: none;
+  animation: none;
+}
+.bell-sound[aria-pressed="true"] { border-color: var(--flame); color: var(--flame-soft); }
+.bell { display: grid; gap: 0.5rem; margin-top: 0.5rem; }
+.bell:empty, .mass:empty { display: none; }
+.bell-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--banner-line);
+  border-left: 3px solid var(--flame);
+  background: var(--banner-bg);
+  color: var(--banner-text);
+  border-radius: 0.35rem;
+  animation: bell-arrive 0.6s ease-out;
+}
+.bell-worse { border-left-color: #e07a76; }
+.bell-text { margin: 0; }
+.bell-actions { display: flex; gap: 0.5rem; }
+.bell-actions form { margin: 0; }
+.mass { display: grid; gap: 0.5rem; margin-top: 0.5rem; }
+.mass-grave {
+  padding: 0.6rem 0.9rem;
+  border: 1px solid var(--notice-line);
+  background: var(--notice-bg);
+  color: var(--notice-text);
+  border-radius: 0.35rem;
+  animation: bell-arrive 0.6s ease-out;
+}
+.mass-grave h2 { margin: 0 0 0.25rem; color: var(--notice-text); }
+.mass-grave ul { margin: 0.25rem 0; padding-left: 1.2rem; }
+.mass-pods-label, .mass-hint { margin: 0.25rem 0; }
+tbody tr.fresh { animation: row-flicker 1.2s ease-in-out 3; background: rgba(255, 179, 71, 0.08); }
+
 /* Keyframes. Only transform, opacity and shadows animate. */
 @keyframes candle-flicker {
   0%, 100% { opacity: 1; box-shadow: 0 0 0.7rem 0.25rem var(--glow); }
@@ -428,6 +494,15 @@ tbody tr:hover { background: rgba(255, 179, 71, 0.04); }
 @keyframes title-glow {
   0%, 100% { text-shadow: 0 0 0.4rem rgba(255, 170, 70, 0.25); }
   50% { text-shadow: 0 0 0.9rem rgba(255, 170, 70, 0.55); }
+}
+@keyframes bell-arrive {
+  from { opacity: 0; transform: translate3d(0, -0.4rem, 0); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes row-flicker {
+  0%, 100% { box-shadow: inset 3px 0 0 var(--flame); }
+  40% { box-shadow: inset 3px 0 0 var(--flame-dim), 0 0 0.8rem rgba(255, 170, 70, 0.25); }
+  70% { box-shadow: inset 3px 0 0 var(--flame-soft); }
 }
 @keyframes typing-breathe {
   0%, 100% { opacity: 0.85; }

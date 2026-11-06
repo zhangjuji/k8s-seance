@@ -9,6 +9,7 @@ Status: in progress (Kiroween 2026, Frankenstein track).
 ## What it does
 
 - **Spirit list.** Shows every Pod that restarted or ended abnormally, with a cause badge: `OOMKilled`, `CrashLoopBackOff`, `ImagePullBackOff`, `Error`, `ProbeFailure` or `Unknown`. The cause comes from deterministic rules, not from the LLM.
+- **Summoning bell.** When the list shows a cluster namespace, it stays up to date through a read-only Pod watch (`GET /api/spirits/stream?ns=`, Server-Sent Events). Watch signals are debounced for 700 ms, then the list is read again and compared with the previous one. A Pod that newly became a spirit gets a notice with its name, cause and restart count, a highlighted row and a **Summon now** button. A spirit that died again gets a notice with its restart count before and after. When 2 or more Pods die of the same cause within 60 seconds, a mass grave card lists them with the first thing to check for that cause. Spirits that were already dead when the page opened are not announced. If the watch or a list fails, the page says the connection is lost and reconnects (the watch backs off from 1 s to 30 s). The bell sound is off until you click the sound button, and it is synthesized in the browser with Web Audio. Animations stop under `prefers-reduced-motion`. Sample mode has no live stream.
 - **Séance chat.** The ghost opens with a statement, then answers your questions as streamed text. Each answer cites evidence as `[E#]`. Click a citation to open the evidence card.
 - **Postmortem.** Markdown with a copy button and a `.md` download. The timeline, evidence and impact sections come from the collected data. The LLM writes only the summary, root cause, remediation and action items. If the LLM is unavailable or the call budget is spent, a rule-based template fills those sections instead.
 - **Graveyard.** Each generated postmortem also becomes a tombstone in a local JSON file: Pod name, namespace, birth and death times, cause, an epitaph (the postmortem's last words) and the postmortem itself. Generating the postmortem again for the same Pod replaces its tombstone. The **墓地** (graveyard) page at `/graveyard` shows the tombstones as a grid, most recent death first. Click one to read its postmortem or download it as `.md`. The JSON list is at `/api/graveyard`. The file defaults to `~/.k8s-seance/graveyard.json` (directory mode 0700, file mode 0600, because postmortems contain log lines). Use `-graveyard <path>` to move it, or `-graveyard ""` to turn the graveyard off. Fixture mode writes tombstones too.
@@ -146,7 +147,7 @@ chmod 600 /tmp/seance-ro.kubeconfig
 rm /tmp/seance-ro.kubeconfig
 ```
 
-The code makes no write calls. In `internal/k8s` the only API calls are `Pods(ns).List`, `Pods(ns).Get`, `Pods(ns).GetLogs` and `Events(ns).List`. `internal/readonly_test.go` scans `internal/` for write methods (Create, Update, Patch, Delete, Evict).
+The code makes no write calls. In `internal/k8s` the only API calls are `Pods(ns).List`, `Pods(ns).Get`, `Pods(ns).Watch`, `Pods(ns).GetLogs` and `Events(ns).List`. `internal/readonly_test.go` scans `internal/` for write methods (Create, Update, Patch, Delete, Evict).
 
 To remove the RBAC objects:
 
@@ -235,7 +236,7 @@ The repository was built with Kiro as a spec-driven project. Everything below co
 ```
 cmd/seance/          CLI entry point: web server and the summon subcommand
 internal/
-  k8s/               read-only collector (client-go): Pods List/Get/GetLogs, Events List
+  k8s/               read-only collector (client-go): Pods List/Get/Watch/GetLogs, Events List
   autopsy/           PodAutopsy model, death-cause classifier, evidence builder
   spirit/            persona prompts (go:embed), séance session, chat
   postmortem/        Markdown postmortem generator and template

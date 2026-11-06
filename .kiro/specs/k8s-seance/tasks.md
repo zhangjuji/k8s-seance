@@ -85,12 +85,12 @@
   - [x] 11.2 Web：回答下方显示「亡灵可能在说谎」，JSON / SSE 带 `doubts`
     - _Requirements: 11.2_
 
-- [ ] 12. 招魂铃
-  - [ ] 12.1 `internal/k8s/watch.go`：`WatchPods`（只读 watch，断开后退避重连并补发信号）
+- [x] 12. 招魂铃
+  - [x] 12.1 `internal/k8s/watch.go`：`WatchPods`（只读 watch，断开后退避重连并补发信号）
     - _Requirements: 12.1, 12.6_
-  - [ ] 12.2 `/api/spirits/stream`：SSE，去抖后重新 list，对比出新亡灵 / 又死一次 / 集体墓葬
+  - [x] 12.2 `/api/spirits/stream`：SSE，去抖后重新 list，对比出新亡灵 / 又死一次 / 集体墓葬
     - _Requirements: 12.1, 12.2, 12.3, 12.4_
-  - [ ] 12.3 列表页：实时状态、提示条 + 立刻召唤、集体墓葬卡片、合成铃声开关、烛火闪动
+  - [x] 12.3 列表页：实时状态、提示条 + 立刻召唤、集体墓葬卡片、合成铃声开关、烛火闪动
     - _Requirements: 12.2, 12.3, 12.4, 12.5, 12.6_
 
 - [ ] 13. 复活咒语

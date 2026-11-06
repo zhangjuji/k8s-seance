@@ -127,6 +127,9 @@ type Server struct {
 	mux     *http.ServeMux
 	seances *seanceStore
 	cache   *llm.OpeningCache
+	// bellDebounce and now drive the summoning bell stream. Tests shorten and fake them.
+	bellDebounce time.Duration
+	now          func() time.Time
 }
 
 // set returns the templates for an interface language.
@@ -171,15 +174,18 @@ func New(opts Options) (*Server, error) {
 	}
 
 	s := &Server{
-		opts:    opts,
-		sets:    sets,
-		seances: newSeanceStore(),
-		cache:   &llm.OpeningCache{},
+		opts:         opts,
+		sets:         sets,
+		seances:      newSeanceStore(),
+		cache:        &llm.OpeningCache{},
+		bellDebounce: bellDebounce,
+		now:          time.Now,
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", s.handleRoot)
 	mux.HandleFunc("GET /spirits", s.handleSpiritsPage)
 	mux.HandleFunc("GET /api/spirits", s.handleSpiritsAPI)
+	mux.HandleFunc("GET /api/spirits/stream", s.handleSpiritsStream)
 	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServerFS(static)))
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
@@ -262,7 +268,11 @@ type listPage struct {
 	Namespace   string
 	SourceName  string
 	FixtureMode bool
-	Rows        []spiritRow
+	// Live is set when the list follows the cluster through the summoning bell
+	// stream at StreamURL.
+	Live      bool
+	StreamURL string
+	Rows      []spiritRow
 	// Notice is shown above the table when the list failed or the cluster is unavailable.
 	Notice string
 }
@@ -298,6 +308,10 @@ func (s *Server) handleSpiritsPage(w http.ResponseWriter, r *http.Request) {
 	default:
 		page.SourceName = src.Name()
 		page.FixtureMode = src.Name() == fixturesSource
+		if _, ok := liveWatcher(src); ok {
+			page.Live = true
+			page.StreamURL = streamURL(ns, lang)
+		}
 		spirits, lerr := s.list(r.Context(), src, ns)
 		if lerr != nil {
 			page.Notice = trf(lang, "read_spirits_failed", lerr.Error())
