@@ -2,7 +2,7 @@
   "name": "seance-dev",
   "description": "K8s Seance development agent with gofmt, vet and test hooks",
   "prompt": "You work on K8s Seance, a Go repository. Follow .kiro/steering/ and .kiro/specs/k8s-seance/. Keep cluster writes inside internal/rite.",
-  "model": "claude-haiku-5.5",
+  "model": "claude-opus-5.5",
   "tools": ["*"],
   "allowedTools": ["read", "grep", "glob", "code", "@gopls"],
   "mcpServers": {

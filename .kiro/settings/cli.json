@@ -1,0 +1,9 @@
+{
+  "chat.modelDefaults": {
+    "claude-opus-5.5": {
+      "output_config": {
+        "effort": "medium"
+      }
+    }
+  }
+}

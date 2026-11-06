@@ -1,6 +1,6 @@
 # Tech
 
-- 开发工具：默认用 Kiro CLI 写代码，模型是 claude-haiku-5.5。命令示例：`kiro-cli chat --model claude-haiku-5.5`。
+- 开发工具：默认用 Kiro CLI 写代码，模型是 claude-opus-5.5，effort 为 medium。命令示例：`kiro-cli chat --agent seance-dev --model claude-opus-5.5 --effort medium`。`.kiro/agents/seance-dev.json` 的 `model` 字段设为 claude-opus-5.5；agent 配置没有 effort 字段，默认 effort 由工作区设置 `.kiro/settings/cli.json` 的 `chat.modelDefaults`（`output_config.effort`）给出，命令行 `--effort` 优先。历史记录：基础任务的启动器和任务 20 的 14 次嵌套测试用的是 claude-haiku-5.5（见 docs/how-we-used-kiro.md），那是有记录的例外。
 - 语言/运行时：Go 1.26+（与 `go.mod` 的 `go 1.26.0` 一致），编译为单个二进制（评委下载即跑）。模块管理用 Go modules。
 - 服务端：`net/http` 标准库（单进程，本地 `localhost:6660`），SSE 流式输出。
 - 前端：`html/template` 渲染页面，htmx（`htmx.min.js`）负责交互，另有 `sse.js`（SSE 连接）和 `memory.js`（遗忘倒计时），都用 `go:embed` 打进二进制。CSS 纯手写，暗色主题，不引入 React、Vue 等前端框架，也不引入任何前端构建链。

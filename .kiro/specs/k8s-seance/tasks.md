@@ -1,6 +1,6 @@
 # Implementation Plan
 
-开发默认用 Kiro CLI 写代码，模型是 claude-haiku-5.5。命令示例：`kiro-cli chat --model claude-haiku-5.5`。
+开发默认用 Kiro CLI 写代码，模型是 claude-opus-5.5，effort 为 medium。命令示例：`kiro-cli chat --agent seance-dev --model claude-opus-5.5 --effort medium`。（2026-11-06 之前这里写的是 claude-haiku-5.5，基础任务和任务 20 的嵌套测试按当时的写法运行。）
 
 - [ ] 1. 项目骨架与演示集群
   - [ ] 1.1 初始化 Go 仓库（Go 1.26+，`go mod init`），按 structure.md 建目录骨架，MIT LICENSE，README 骨架，确认 `.kiro/` 不在 `.gitignore`；等 Devpost 发 Didit 身份验证邮件并完成验证

@@ -110,6 +110,8 @@ Not re-checked: the parallel write-and-commit race and the missing `agentSpawn` 
 
 `.kiro/agents/seance-dev.json` and `.kiro/steering/tech.md` still name `claude-haiku-5.5` as the default. The runs above override it on the command line.
 
+Update after this acceptance: both files now name `claude-opus-5.5`, and `.kiro/settings/cli.json` sets its default effort to `medium`.
+
 ## Parity with main
 
 `parity/PARITY.md` compares the rewrite with the README, requirements and tasks of `main` at `638aa4a`. No source code of `main` was read. Both branches list the same 19 requirements. The rewrite adds R6.2 (30000 total input) and R19.1 (loopback Host).
