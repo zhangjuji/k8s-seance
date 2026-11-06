@@ -854,3 +854,137 @@ tr.memory-vanishing .memory-count,
 .lineage-diff th, .lineage-diff td { border: 1px solid var(--line); padding: 0.25rem 0.4rem; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
 .lineage-diff thead th { color: var(--muted); font-weight: normal; }
 .lineage-diff tr.diff-hidden td { color: var(--banner-text); font-style: italic; }
+
+/* Spirit board (Requirement 17). The runes are placed by the server in percent
+   of the board; the planchette moves with left/top transitions. */
+.board-wrap {
+  margin: 0 0 1rem;
+  padding: 0.4rem 0.8rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg-2);
+}
+.board-wrap > summary,
+.memory-panel > summary {
+  cursor: pointer;
+  list-style-position: inside;
+}
+.board-wrap > summary h2,
+.memory-panel > summary h2 { display: inline; margin: 0; font-size: 1rem; }
+.board {
+  position: relative;
+  width: 100%;
+  max-width: 36rem;
+  aspect-ratio: 16 / 10;
+  margin: 0.5rem auto 0.25rem;
+  border: 1px solid var(--flame-dim);
+  border-radius: 1.2rem;
+  background:
+    radial-gradient(ellipse 60% 50% at 50% 55%, rgba(255, 179, 71, 0.10), transparent 75%),
+    linear-gradient(160deg, #2a2117, #1b1610 60%, #241b12);
+  box-shadow: inset 0 0 2.5rem rgba(0, 0, 0, 0.6), 0 0 1.2rem -0.4rem var(--glow);
+  font-family: Georgia, "Times New Roman", "Songti SC", serif;
+  color: var(--flame-soft);
+}
+.rune, .board-word, .board-digits {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  white-space: nowrap;
+}
+.rune {
+  padding: 0.05rem 0.3rem;
+  border-radius: 0.3rem;
+  font-size: 0.85rem;
+  text-decoration: none;
+  color: var(--flame-soft);
+  text-shadow: 0 0 0.3rem rgba(255, 179, 71, 0.4);
+}
+.rune:hover, .rune:focus-visible { color: #fff; }
+.rune.rune-lit, .board-word.rune-lit {
+  color: #fff;
+  background: rgba(255, 179, 71, 0.25);
+  box-shadow: 0 0 0.7rem var(--glow);
+}
+.board-word { font-size: 1.05rem; letter-spacing: 0.1em; top: 13%; }
+.board-yes { left: 12%; }
+.board-no { left: 88%; }
+.board-bye { left: 50%; top: 91%; }
+.board-digits {
+  left: 50%;
+  top: 79%;
+  display: flex;
+  gap: 0.9rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+.planchette {
+  position: absolute;
+  left: 50%;
+  top: 55%;
+  width: 3rem;
+  height: 3.4rem;
+  transform: translate(-50%, -50%);
+  border-radius: 50% 50% 45% 45% / 60% 60% 40% 40%;
+  border: 1px solid rgba(255, 217, 160, 0.6);
+  background:
+    radial-gradient(circle at 50% 45%, transparent 0 0.55rem, rgba(255, 217, 160, 0.7) 0.6rem 0.68rem, transparent 0.7rem),
+    rgba(236, 230, 220, 0.12);
+  box-shadow: 0 0 0.9rem rgba(255, 179, 71, 0.35);
+  pointer-events: none;
+  transition: left 0.6s ease-in-out, top 0.6s ease-in-out;
+}
+.planchette.planchette-no { animation: planchette-shake 0.5s ease-in-out 2; border-color: #e07a76; }
+@keyframes planchette-shake {
+  0%, 100% { transform: translate(-50%, -50%); }
+  25% { transform: translate(-62%, -50%) rotate(-6deg); }
+  75% { transform: translate(-38%, -50%) rotate(6deg); }
+}
+.board-hint { margin: 0.3rem 0 0; color: var(--muted); font-size: 0.8rem; }
+.board-status { margin: 0.2rem 0 0; min-height: 1.2em; color: var(--flame-soft); font-size: 0.85rem; }
+/* The evidence card the planchette points at. */
+.evidence details.ev-lit {
+  border-color: var(--flame);
+  box-shadow: 0 0 0.8rem rgba(255, 179, 71, 0.35);
+}
+
+/* Bold and code in answers (markdownLite, after escaping). */
+.turn .text strong { color: var(--flame-soft); }
+.turn .text code {
+  padding: 0 0.25em;
+  border-radius: 0.2em;
+  background: var(--code-bg);
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  font-size: 0.9em;
+}
+
+/* The forgetting panel is folded until its key memory starts to fade. */
+.memory-panel > summary .memory-count,
+.memory-panel > summary .memory-none { margin-left: 0.5rem; font-size: 0.9rem; }
+.memory-panel[open] > summary { margin-bottom: 0.4rem; }
+
+/* The tagline under the list title. */
+.tagline { margin: -0.4rem 0 1rem; color: var(--muted); font-style: italic; }
+
+/* Phones: the board, the difference table and the navigation. */
+@media (max-width: 800px) {
+  .topbar nav { flex-wrap: wrap; gap: 0.3rem 0.9rem; }
+  .lineage-diff { display: table; white-space: normal; }
+}
+@media (max-width: 640px) {
+  .board { aspect-ratio: 4 / 3; border-radius: 0.8rem; }
+  .rune { font-size: 0.7rem; padding: 0 0.15rem; }
+  .board-word { font-size: 0.85rem; letter-spacing: 0.05em; }
+  .board-yes { left: 14%; }
+  .board-no { left: 86%; }
+  .board-digits { gap: 0.45rem; font-size: 0.75rem; }
+  .planchette { width: 2.2rem; height: 2.5rem; }
+  .lineage-diff thead { display: none; }
+  .lineage-diff, .lineage-diff tbody, .lineage-diff tr, .lineage-diff th, .lineage-diff td { display: block; width: 100%; }
+  .lineage-diff tr { margin-bottom: 0.4rem; border: 1px solid var(--line); }
+  .lineage-diff th, .lineage-diff td { border: 0; }
+  .lineage-diff td::before { content: attr(data-label) ": "; color: var(--muted); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .planchette { transition: none; }
+  .planchette.planchette-no { animation: none; }
+}

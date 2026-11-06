@@ -304,7 +304,8 @@ func TestSeanceMemoryClusterClock(t *testing.T) {
 	html := get(t, srv, created.PageURL).Body.String()
 	for _, want := range []string{
 		"<h2>Fading memory</h2>",
-		`<section id="memory-panel" class="memory-panel memory-fading memory-vanishing"`,
+		`<details id="memory-panel" class="memory-panel memory-fading memory-vanishing"`,
+		`data-memory-scope data-memory-autoopen open>`,
 		`data-memory-main data-memory-left="240">forgotten in 4 min</span>`,
 		"Container app is in CrashLoopBackOff.",
 		"Keep the memory: write the postmortem",

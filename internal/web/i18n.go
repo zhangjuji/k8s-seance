@@ -113,6 +113,14 @@ var catalog = map[string]map[string]string{
 		"no_answer":       "亡灵没有应答，请稍后再试。",
 		"pm_timeout":      "复盘生成超时，请稍后再试。",
 
+		"board_title":   "降灵板",
+		"board_yes":     "是",
+		"board_no":      "否",
+		"board_bye":     "再会",
+		"board_hint":    "符文是本场的证据编号。亡灵引用 [E#] 时乩板移过去；回答结束时指向「是」，谎言检测发现矛盾时指向「否」；生成复盘后指向「再会」。",
+		"board_said_js": "乩板指向：{rune}",
+		"list_tagline":  "每个死去的 Pod 都留下了遗言：退出码、事件和日志。召唤它，让它亲口说。",
+
 		"doubt_title":    "亡灵可能在说谎",
 		"doubt_note":     "以下说法在证据里对不上。没有列出的话也只表示没有发现矛盾，不表示已验证。",
 		"doubt_citation": "引用 %s 不在证据列表里",
@@ -271,6 +279,14 @@ var catalog = map[string]map[string]string{
 		"lang_mismatch":   "This séance is held in %s. Switching the language only changes the interface.",
 		"no_answer":       "The spirit did not answer. Try again later.",
 		"pm_timeout":      "The postmortem timed out. Try again later.",
+
+		"board_title":   "Spirit board",
+		"board_yes":     "YES",
+		"board_no":      "NO",
+		"board_bye":     "GOODBYE",
+		"board_hint":    "The runes are this séance's evidence IDs. The planchette moves to each [E#] the spirit cites. When an answer ends it points to YES, or to NO when the fact check found a contradiction. After the postmortem it says GOODBYE.",
+		"board_said_js": "The planchette points to {rune}",
+		"list_tagline":  "Every dead Pod leaves last words: exit codes, events and logs. Summon one and let it tell you.",
 
 		"doubt_title":    "The spirit may be lying",
 		"doubt_note":     "These claims do not match the evidence. Anything not listed only means no contradiction was found, not that it is verified.",

@@ -499,26 +499,31 @@ type turnView struct {
 	Advice bool
 	// Doubts are listed under the reply as "the spirit may be lying".
 	Doubts []doubtItem
-	Used   int
-	Left   int
+	// Verdict is where the spirit board's planchette goes when the turn ends:
+	// "yes", "no" or "" (Requirement 17).
+	Verdict string
+	Used    int
+	Left    int
 }
 
 // renderTurn builds the HTML fragment of one turn in the séance language. The
 // text is escaped first, and then each [E#] that names a known evidence item
-// becomes a link to its card.
+// becomes a link to its card. Spirit replies also get **bold** and `code`.
 func (se *seance) renderTurn(index int, role, content string, doubts []doubtItem, used, left int) string {
 	v := turnView{
-		Index:  index,
-		Role:   role,
-		Who:    tr(se.lang, "who_user"),
-		Body:   se.linkEvidence(content),
-		Advice: role == roleSpirit && isAdvice(content),
-		Doubts: doubts,
-		Used:   used,
-		Left:   left,
+		Index:   index,
+		Role:    role,
+		Who:     tr(se.lang, "who_user"),
+		Body:    se.linkEvidence(content),
+		Advice:  role == roleSpirit && isAdvice(content),
+		Doubts:  doubts,
+		Verdict: turnVerdict(role, llm.IsExhaustedLine(content), doubts),
+		Used:    used,
+		Left:    left,
 	}
 	if role == roleSpirit {
 		v.Who = tr(se.lang, "who_spirit")
+		v.Body = se.renderReply(content)
 	}
 	var buf bytes.Buffer
 	if err := se.tmpl.ExecuteTemplate(&buf, "turn", v); err != nil {
@@ -530,15 +535,25 @@ func (se *seance) renderTurn(index int, role, content string, doubts []doubtItem
 
 // linkEvidence escapes text and turns each [E#] into a link to #ev-E#.
 func (se *seance) linkEvidence(text string) template.HTML {
-	escaped := template.HTMLEscapeString(text)
-	out := evidenceRef.ReplaceAllStringFunc(escaped, func(ref string) string {
+	return template.HTML(se.linkRefs(template.HTMLEscapeString(text)))
+}
+
+// renderReply escapes a spirit reply, renders **bold** and `code` with
+// markdownLite, and links each [E#] outside code spans.
+func (se *seance) renderReply(text string) template.HTML {
+	return template.HTML(markdownLite(template.HTMLEscapeString(text), se.linkRefs))
+}
+
+// linkRefs turns each [E#] of escaped text that names a known evidence item
+// into a link to its card.
+func (se *seance) linkRefs(escaped string) string {
+	return evidenceRef.ReplaceAllStringFunc(escaped, func(ref string) string {
 		id := ref[1 : len(ref)-1]
 		if !se.evIDs[id] {
 			return ref
 		}
 		return `<a class="ev-link" href="#ev-` + id + `">` + ref + `</a>`
 	})
-	return template.HTML(out)
 }
 
 // adviceMarkers are the words that mark a reply as a fix suggestion.
@@ -582,7 +597,9 @@ type seancePage struct {
 	// Memory is the forgetting panel (Requirement 14).
 	Memory memoryPanel
 	// Lineage is the family and rebirths panel (Requirement 16).
-	Lineage       lineagePanel
+	Lineage lineagePanel
+	// Board is the spirit board (Requirement 17).
+	Board         spiritBoard
 	PostmortemURL string
 	// SpellURL is the resurrection spell panel (Requirement 13).
 	SpellURL string
@@ -636,6 +653,7 @@ func (se *seance) pageData(r *http.Request, ui string) seancePage {
 		Evidence:      cards,
 		Memory:        memory,
 		Lineage:       buildLineage(ui, se.sess.Autopsy, se.evidence),
+		Board:         buildBoard(se.evidence),
 		PostmortemURL: seancePostmortemURL(se.id),
 		SpellURL:      seanceSpellURL(se.id),
 	}

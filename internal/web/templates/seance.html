@@ -7,11 +7,11 @@
   </header>
   {{with .LangNotice}}<p class="lang-notice" role="note">{{.}}</p>{{end}}
 
-  {{with .Memory}}<section id="memory-panel" class="memory-panel{{if .HasKey}} {{.Key.Class}}{{end}}" aria-label="{{T "memory_title"}}"{{if .HasKey}} data-memory-scope{{end}}>
-    <h2>{{T "memory_title"}}</h2>
+  {{with .Memory}}<details id="memory-panel" class="memory-panel{{if .HasKey}} {{.Key.Class}}{{end}}" aria-label="{{T "memory_title"}}"{{if .HasKey}} data-memory-scope data-memory-autoopen{{end}}{{if .Open}} open{{end}}>
+    <summary><h2>{{T "memory_title"}}</h2>{{if .HasKey}} <span class="memory-count {{.Key.Class}}" data-memory-main data-memory-left="{{.Key.Left}}">{{.Key.Text}}</span>{{else}} <span class="memory-none">{{T "memory_none"}}</span>{{end}}</summary>
     {{if .HasKey}}
     <p class="memory-key">{{T "memory_key"}} {{with .KeyID}}<a class="ev-link" href="#ev-{{.}}">[{{.}}]</a> {{end}}<code>{{.KeyReason}}</code> {{.KeyMessage}}</p>
-    <p>{{Tf "memory_key_at" .KeyAt}} · <span class="memory-count {{.Key.Class}}" data-memory-main data-memory-left="{{.Key.Left}}">{{.Key.Text}}</span></p>
+    <p>{{Tf "memory_key_at" .KeyAt}}</p>
     {{else}}
     <p class="memory-none">{{T "memory_none"}}</p>
     {{end}}
@@ -20,7 +20,7 @@
     {{end}}<p class="memory-warn">{{T "memory_pod_gone"}}</p>
     {{if .Fixture}}<p class="memory-note">{{Tf "memory_fixture_asof" .AsOf}}</p>{{end}}
     <button type="button" class="memory-keep" hx-post="{{$.PostmortemURL}}" hx-target="#postmortem" hx-swap="innerHTML">{{T "memory_keep"}}</button>
-  </section>{{end}}
+  </details>{{end}}
 
   {{with .Lineage}}{{if .Show}}<section id="lineage-panel" class="lineage-panel{{with .Verdict}} lineage-{{.}}{{end}}" aria-label="{{T "lineage_title"}}">
     <h2>{{T "lineage_title"}}</h2>
@@ -39,7 +39,7 @@
       <ul class="lineage-kin">{{range .Pods}}<li class="{{if .Alive}}kin-alive{{else}}kin-dead{{end}}"><span class="kin-name">{{.Name}}</span> · {{if .Alive}}{{T "lineage_alive"}}{{else}}{{T "lineage_dead"}}{{end}} · {{Tf "lineage_on_node" .Node}}{{if not .Alive}}{{with .State}} · <code>{{.}}</code>{{end}}{{end}}</li>{{end}}</ul>
       {{if .Diffs}}<div class="lineage-diff-wrap"><table class="lineage-diff">
         <thead><tr><th scope="col">{{T "lineage_col_field"}}</th><th scope="col">{{T "lineage_col_other"}}</th><th scope="col">{{T "lineage_col_this"}}</th></tr></thead>
-        <tbody>{{range .Diffs}}<tr{{if .Hidden}} class="diff-hidden"{{end}}><th scope="row"><code>{{.Field}}</code></th><td><code>{{.From}}</code></td><td><code>{{.To}}</code></td></tr>
+        <tbody>{{range .Diffs}}<tr{{if .Hidden}} class="diff-hidden"{{end}}><th scope="row"><code>{{.Field}}</code></th><td data-label="{{T "lineage_col_other"}}"><code>{{.From}}</code></td><td data-label="{{T "lineage_col_this"}}"><code>{{.To}}</code></td></tr>
         {{end}}</tbody>
       </table></div>{{if .More}}<p class="lineage-note">+{{.More}}</p>{{end}}{{else}}<p class="lineage-note">{{T "lineage_no_diff"}}</p>{{end}}
     </div>
@@ -48,6 +48,19 @@
 
   <div class="seance-body">
     <div class="chat">
+      <details id="board-wrap" class="board-wrap" open>
+        <summary><h2>{{T "board_title"}}</h2></summary>
+        <div id="spirit-board" class="board" role="group" aria-label="{{T "board_title"}}">
+          <span class="board-word board-yes" data-rune="yes">{{T "board_yes"}}</span>
+          <span class="board-word board-no" data-rune="no">{{T "board_no"}}</span>
+          {{range .Board.Runes}}<a class="rune ev-link" href="#ev-{{.ID}}" data-rune="{{.ID}}" title="{{.Kind}}" style="left: {{.Left}}%; top: {{.Top}}%">{{.ID}}</a>
+          {{end}}<div class="board-digits" aria-hidden="true">{{range .Board.Digits}}<span>{{.}}</span>{{end}}</div>
+          <span class="board-word board-bye" data-rune="bye">{{T "board_bye"}}</span>
+          <span id="planchette" class="planchette" aria-hidden="true"></span>
+        </div>
+        <p class="board-hint">{{T "board_hint"}}</p>
+        <p id="board-status" class="board-status" role="status" aria-live="polite"></p>
+      </details>
       <div id="log" class="log">{{range .Turns}}{{.}}{{end}}</div>
       <div id="typing" class="turn turn-spirit typing" hidden><span class="who">{{.SpiritWho}}</span><p class="text" id="typing-text"></p></div>
       <div id="feed" hidden hx-trigger="sse:delta, sse:turn, sse:exhausted"></div>
@@ -139,6 +152,123 @@
   });
 
   tidy();
+})();
+
+// The spirit board (Requirement 17). While a reply streams, the planchette
+// moves to each [E#] it cites, one step every 750 ms, and lights that evidence
+// card. When the reply ends it goes to YES, or to NO and shakes when the fact
+// check found a contradiction (data-verdict on the turn). A postmortem sends it
+// to GOODBYE. Turns already on the page when it opens do not move it.
+(function () {
+  var board = document.getElementById('spirit-board');
+  var wrap = document.getElementById('board-wrap');
+  var planchette = document.getElementById('planchette');
+  var status = document.getElementById('board-status');
+  var log = document.getElementById('log');
+  if (!board || !planchette || !log) { return; }
+  var STEP_MS = 750;
+  var REF = /\[(E\d+)\]/g;
+  var said = {{T "board_said_js"}};
+  var words = {yes: {{T "board_yes"}}, no: {{T "board_no"}}, bye: {{T "board_bye"}}};
+  var streamed = {};  // turn index -> text received as deltas
+  var moved = {};     // turn index -> how many of its references were queued
+  var done = {};      // turn index -> its end was handled
+  var queue = [], busy = false, current = null;
+
+  function runeFor(key) {
+    var runes = board.querySelectorAll('[data-rune]');
+    for (var i = 0; i < runes.length; i++) {
+      if (runes[i].getAttribute('data-rune') === key) { return runes[i]; }
+    }
+    return null;
+  }
+
+  // place puts the planchette over the rune key, in percent of the board, so it
+  // stays in place when the board is resized. A folded board has no size: the
+  // position is applied again when it is unfolded.
+  function place(key) {
+    var rune = runeFor(key);
+    if (!rune) { return; }
+    var b = board.getBoundingClientRect(), r = rune.getBoundingClientRect();
+    if (!b.width || !b.height) { return; }
+    planchette.style.left = ((r.left + r.width / 2 - b.left) / b.width * 100) + '%';
+    planchette.style.top = ((r.top + r.height / 2 - b.top) / b.height * 100) + '%';
+  }
+
+  function light(key) {
+    var lit = document.querySelectorAll('.rune-lit, .ev-lit');
+    for (var i = 0; i < lit.length; i++) { lit[i].classList.remove('rune-lit', 'ev-lit'); }
+    var rune = runeFor(key);
+    if (rune) { rune.classList.add('rune-lit'); }
+    var card = document.getElementById('ev-' + key);
+    if (card) { card.classList.add('ev-lit'); }
+  }
+
+  function step() {
+    if (!queue.length) { busy = false; return; }
+    busy = true;
+    var key = queue.shift();
+    current = key;
+    planchette.classList.remove('planchette-no');
+    place(key);
+    light(key);
+    if (key === 'no') {
+      void planchette.offsetWidth; // restart the shake
+      planchette.classList.add('planchette-no');
+    }
+    if (status) { status.textContent = said.replace('{rune}', words[key] || key); }
+    window.setTimeout(step, STEP_MS);
+  }
+
+  function push(key) {
+    if (!runeFor(key)) { return; }
+    queue.push(key);
+    if (!busy) { step(); }
+  }
+
+  // follow queues the references in text that were not queued for turn index.
+  function follow(index, text) {
+    var refs = [], m;
+    REF.lastIndex = 0;
+    while ((m = REF.exec(text)) !== null) { refs.push(m[1]); }
+    for (var i = moved[index] || 0; i < refs.length; i++) { push(refs[i]); }
+    moved[index] = Math.max(moved[index] || 0, refs.length);
+  }
+
+  // finish handles each new spirit turn in the log once: its remaining
+  // references, then its verdict.
+  function finish() {
+    var turns = log.querySelectorAll('.turn-spirit[data-turn]');
+    for (var i = 0; i < turns.length; i++) {
+      var index = turns[i].getAttribute('data-turn');
+      if (done[index]) { continue; }
+      done[index] = true;
+      var text = turns[i].querySelector('.text');
+      follow(index, text ? text.textContent : '');
+      var verdict = turns[i].getAttribute('data-verdict');
+      if (verdict === 'yes' || verdict === 'no') { push(verdict); }
+    }
+  }
+
+  // The turns on the page when it opens are history.
+  var old = log.querySelectorAll('[data-turn]');
+  for (var i = 0; i < old.length; i++) { done[old[i].getAttribute('data-turn')] = true; }
+
+  document.body.addEventListener('sse:delta', function (e) {
+    var d = JSON.parse(e.detail.data);
+    streamed[d.index] = (streamed[d.index] || '') + d.text;
+    follow(String(d.index), streamed[d.index]);
+  });
+  document.body.addEventListener('sse:turn', finish);
+  document.body.addEventListener('htmx:afterSettle', function (e) {
+    finish();
+    var target = e.detail && e.detail.target;
+    if (target && target.id === 'postmortem' && target.querySelector('.postmortem')) { push('bye'); }
+  });
+  if (wrap) {
+    wrap.addEventListener('toggle', function () { if (wrap.open && current) { place(current); } });
+  }
+  window.addEventListener('resize', function () { if (current) { place(current); } });
 })();
 </script>
 {{end}}

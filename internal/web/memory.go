@@ -86,6 +86,10 @@ type memoryPanel struct {
 	All   countdown
 	// RestartsSoon are the containers whose --previous log the next restart overwrites.
 	RestartsSoon []string
+	// Open unfolds the panel when it is drawn: the key memory fades in less than
+	// 15 minutes. Otherwise the panel starts folded (Requirement 17.5), and
+	// memory.js unfolds it once the countdown gets there.
+	Open bool
 	// Fixture is set in sample mode, where the countdown starts at AsOf, the recording time.
 	Fixture bool
 	AsOf    string
@@ -114,6 +118,7 @@ func buildMemory(lang string, a *autopsy.PodAutopsy, ev []autopsy.Evidence, ttl 
 		p.KeyMessage = m.Key.Message
 		p.KeyAt = formatTime(&m.Key.FadesAt)
 		p.Key = newCountdown(lang, m.LeftSeconds)
+		p.Open = memoryFading(m.LeftSeconds)
 	}
 	if m.AllFadeAt != nil {
 		p.AllAt = formatTime(m.AllFadeAt)

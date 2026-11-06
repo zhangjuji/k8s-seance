@@ -8,6 +8,8 @@
 // An element marked data-memory-main also sets these classes on its closest
 // [data-memory-scope] (a list row, an evidence card, the séance panel).
 // Elements that replace older ones (the live list) start from their own value.
+// A scope marked data-memory-autoopen (the folded séance panel, Requirement
+// 17) unfolds once when it starts to fade. Folding it again is left alone.
 // A spirit on the altar (data-enshrined on the element or its row, Requirement
 // 15) only has its text updated: it never fades and never raises the banner,
 // because its postmortem already keeps the evidence.
@@ -69,6 +71,14 @@
     return initial - Math.floor((now - t0) / 1000);
   }
 
+  function autoOpen(scope, left) {
+    if (!scope.hasAttribute('data-memory-autoopen') || scope.hasAttribute('data-memory-opened')) { return; }
+    if (left > 0 && left < FADING) {
+      scope.setAttribute('data-memory-opened', '');
+      scope.open = true;
+    }
+  }
+
   function enshrined(el) {
     if (el.hasAttribute('data-enshrined')) { return true; }
     return !!(el.closest && el.closest('[data-enshrined]'));
@@ -92,7 +102,10 @@
       setStates(el, on);
       if (el.hasAttribute('data-memory-main')) {
         var scope = el.closest ? el.closest('[data-memory-scope]') : null;
-        if (scope) { setStates(scope, on); }
+        if (scope) {
+          setStates(scope, on);
+          autoOpen(scope, left);
+        }
       }
       if (el.hasAttribute('data-memory-banner') && left > 0 && left < FADING) {
         fading = true;
