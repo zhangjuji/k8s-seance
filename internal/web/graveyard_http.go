@@ -98,11 +98,12 @@ func (s *Server) handleGraveyardAPI(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, graveyardResponse{Tombstones: items})
 }
 
-// graveyardPage is the data of templates/graveyard.html.
+// graveyardPage is the data of templates/graveyard.html: the ofrenda.
 type graveyardPage struct {
-	UI     chrome
-	Title  string
-	Stones []stoneView
+	UI    chrome
+	Title string
+	// Tiers are the altar steps, the most recent deaths on top.
+	Tiers  []altarTier
 	Notice string
 }
 
@@ -133,8 +134,8 @@ func stoneOf(t graveyard.Tombstone) stoneView {
 	}
 }
 
-// handleGraveyardPage renders the tombstone grid. A missing or unreadable
-// graveyard is shown as a notice on a 200 page.
+// handleGraveyardPage renders the ofrenda: the tombstones as framed photos on
+// altar tiers. A missing or unreadable graveyard is shown as a notice on a 200 page.
 func (s *Server) handleGraveyardPage(w http.ResponseWriter, r *http.Request) {
 	lang := s.pageLang(w, r)
 	page := graveyardPage{UI: chromeFor(r, lang), Title: tr(lang, "gy_title")}
@@ -144,9 +145,11 @@ func (s *Server) handleGraveyardPage(w http.ResponseWriter, r *http.Request) {
 		s.opts.Logger.Printf("list graveyard: %v", err)
 		page.Notice = tr(lang, "gy_read_failed")
 	} else {
+		stones := make([]stoneView, 0, len(all))
 		for _, t := range all {
-			page.Stones = append(page.Stones, stoneOf(t))
+			stones = append(stones, stoneOf(t))
 		}
+		page.Tiers = altarTiers(stones)
 	}
 	s.render(w, s.set(lang).graveyard, page)
 }
@@ -159,7 +162,8 @@ type tombstonePage struct {
 	PM    postmortemView
 }
 
-// handleTombstonePage shows one tombstone and its postmortem.
+// handleTombstonePage shows one spirit's photo on its own altar step, in the
+// style of the ofrenda, and its postmortem.
 func (s *Server) handleTombstonePage(w http.ResponseWriter, r *http.Request) {
 	t, ok := s.tombstoneFor(w, r)
 	if !ok {

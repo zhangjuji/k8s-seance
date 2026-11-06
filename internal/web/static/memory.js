@@ -8,6 +8,9 @@
 // An element marked data-memory-main also sets these classes on its closest
 // [data-memory-scope] (a list row, an evidence card, the séance panel).
 // Elements that replace older ones (the live list) start from their own value.
+// A spirit on the altar (data-enshrined on the element or its row, Requirement
+// 15) only has its text updated: it never fades and never raises the banner,
+// because its postmortem already keeps the evidence.
 (function () {
   'use strict';
   var TICK_MS = 10000;
@@ -66,6 +69,11 @@
     return initial - Math.floor((now - t0) / 1000);
   }
 
+  function enshrined(el) {
+    if (el.hasAttribute('data-enshrined')) { return true; }
+    return !!(el.closest && el.closest('[data-enshrined]'));
+  }
+
   function scan() {
     var t = labels();
     var now = Date.now();
@@ -75,8 +83,12 @@
       var el = els[i];
       var left = leftNow(el, now);
       if (left === null) { continue; }
-      var on = states(left);
       el.textContent = text(t, left);
+      if (enshrined(el)) {
+        setStates(el, []);
+        continue;
+      }
+      var on = states(left);
       setStates(el, on);
       if (el.hasAttribute('data-memory-main')) {
         var scope = el.closest ? el.closest('[data-memory-scope]') : null;

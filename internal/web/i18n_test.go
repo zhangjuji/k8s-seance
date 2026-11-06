@@ -308,7 +308,7 @@ func TestEnglishPostmortemAndGraveyard(t *testing.T) {
 
 	rec := send(t, srv, http.MethodPost, "/api/seances/"+res.ID+"/postmortem", "", "", map[string]string{"HX-Request": "true", "Accept-Language": "en"})
 	panel := rec.Body.String()
-	for _, want := range []string{`aria-label="Postmortem"`, ">Copy</button>", "Download .md", "Buried. Visit the graveyard", `"Copied"`} {
+	for _, want := range []string{`aria-label="Postmortem"`, ">Copy</button>", "Download .md", "On the ofrenda. It will not be forgotten", `"Copied"`} {
 		if !strings.Contains(panel, want) {
 			t.Errorf("English postmortem panel has no %q", want)
 		}
@@ -318,7 +318,7 @@ func TestEnglishPostmortemAndGraveyard(t *testing.T) {
 	}
 
 	grid := getWith(t, srv, "/graveyard?lang=en", nil).Body.String()
-	for _, want := range []string{"<h1>Graveyard</h1>", "Born: ", "Died: ", crashPod} {
+	for _, want := range []string{"<h1>Ofrenda</h1>", "Born: ", "Died: ", crashPod} {
 		if !strings.Contains(grid, want) {
 			t.Errorf("English graveyard has no %q", want)
 		}
@@ -331,14 +331,14 @@ func TestEnglishPostmortemAndGraveyard(t *testing.T) {
 		t.Fatalf("tombstones = %d", len(all))
 	}
 	tomb := getWith(t, srv, "/graveyard/"+all[0].ID+"?lang=en", nil).Body.String()
-	for _, want := range []string{"Tomb of " + crashPod, "← Back to the graveyard", "<h2>Postmortem</h2>"} {
+	for _, want := range []string{crashPod + " on the ofrenda", "← Back to the ofrenda", "<h2>Postmortem</h2>"} {
 		if !strings.Contains(tomb, want) {
 			t.Errorf("English tombstone page has no %q", want)
 		}
 	}
 
 	off := newTestServer(t, Options{FixturesOnly: true})
-	if html := getWith(t, off, "/graveyard?lang=en", nil).Body.String(); !strings.Contains(html, "The graveyard is off") {
+	if html := getWith(t, off, "/graveyard?lang=en", nil).Body.String(); !strings.Contains(html, "The ofrenda is off") {
 		t.Error("English graveyard-off notice missing")
 	}
 }

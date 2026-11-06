@@ -237,7 +237,8 @@ func (b *bell) update(ctx context.Context) (string, any) {
 		b.sick = true
 		return eventTrouble, troubleEvent{Text: tr(b.lang, "bell_trouble"), Error: trf(b.lang, "read_spirits_failed", err.Error())}
 	}
-	html, err := b.s.renderRows(b.lang, b.src.Name(), spirits)
+	altar := b.s.enshrinedSpirits()
+	html, err := b.s.renderRows(b.lang, b.src.Name(), spirits, altar)
 	if err != nil {
 		b.s.opts.Logger.Printf("render live rows: %v", err)
 		return "", nil
@@ -272,7 +273,7 @@ func (b *bell) update(ctx context.Context) (string, any) {
 		}
 	}
 	quiet := len(ev.Arrived) == 0 && len(ev.Worse) == 0 && len(ev.Mass) == 0
-	sig := rowsSignature(b.lang, spirits)
+	sig := rowsSignature(b.lang, spirits, altar)
 	unchanged := b.ready && sig == b.last && !b.sick
 	b.prev, b.ready, b.last, b.sick = spirits, true, sig, false
 	if quiet && unchanged {
@@ -288,10 +289,11 @@ type rowsView struct {
 	Rows       []spiritRow
 }
 
-// renderRows renders the table body for spirits in lang.
-func (s *Server) renderRows(lang, source string, spirits []autopsy.SpiritSummary) (string, error) {
+// renderRows renders the table body for spirits in lang, with the spirits in
+// altar marked enshrined.
+func (s *Server) renderRows(lang, source string, spirits []autopsy.SpiritSummary, altar enshrined) (string, error) {
 	var buf bytes.Buffer
-	view := rowsView{UI: chrome{Lang: lang}, SourceName: source, Rows: rowsOf(lang, spirits)}
+	view := rowsView{UI: chrome{Lang: lang}, SourceName: source, Rows: rowsOf(lang, spirits, altar)}
 	if err := s.set(lang).list.ExecuteTemplate(&buf, "spirit_rows", view); err != nil {
 		return "", err
 	}
@@ -301,9 +303,10 @@ func (s *Server) renderRows(lang, source string, spirits []autopsy.SpiritSummary
 // rowsSignature describes the table body with the moment each key memory fades
 // instead of the seconds left, which change on every list of a live cluster.
 // The browser counts those down by itself, so a list that differs only in them
-// is not sent again, while a refreshed or new Warning event is.
-func rowsSignature(lang string, spirits []autopsy.SpiritSummary) string {
-	rows := rowsOf(lang, spirits)
+// is not sent again, while a refreshed or new Warning event is. A spirit put on
+// the altar since the last list changes the signature too.
+func rowsSignature(lang string, spirits []autopsy.SpiritSummary, altar enshrined) string {
+	rows := rowsOf(lang, spirits, altar)
 	fades := make([]int64, len(spirits))
 	for i := range rows {
 		rows[i].Memory = countdown{}

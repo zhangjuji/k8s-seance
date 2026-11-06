@@ -314,7 +314,7 @@ func TestGraveyardOff(t *testing.T) {
 		t.Errorf("/api/graveyard: status = %d, want 404", rec.Code)
 	}
 	rec := get(t, srv, "/graveyard")
-	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "墓地未开启") {
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "祭坛未开启") {
 		t.Errorf("/graveyard: status = %d, body lacks the off notice", rec.Code)
 	}
 	if rec := get(t, srv, "/graveyard/0123456789ab"); rec.Code != http.StatusNotFound {
@@ -344,7 +344,7 @@ func TestCorruptGraveyardKeepsPostmortemAndFile(t *testing.T) {
 		t.Errorf("/api/graveyard: status = %d, want 500", rec.Code)
 	}
 	rec := get(t, srv, "/graveyard")
-	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "读取墓地失败") {
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "读取祭坛失败") {
 		t.Errorf("/graveyard: status = %d, lacks the read notice", rec.Code)
 	}
 }
@@ -372,7 +372,7 @@ func TestGraveyardEscapesStoredText(t *testing.T) {
 func TestEmptyGraveyardPageAndNav(t *testing.T) {
 	srv, _ := newGraveyardServer(t)
 	rec := get(t, srv, "/graveyard")
-	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "墓地还是空的") {
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "祭坛还是空的") {
 		t.Errorf("/graveyard empty: status = %d", rec.Code)
 	}
 	if body := get(t, srv, "/spirits").Body.String(); !strings.Contains(body, `href="/graveyard"`) {

@@ -223,13 +223,14 @@
 {{end}}{{end}}
 
 {{define "spirit_rows"}}{{range .Rows}}
-      <tr data-pod="{{.Name}}"{{if .HasMemory}} data-memory-scope class="{{.Memory.Class}}"{{end}}>
+      {{/* An enshrined row (on the altar) never fades and never raises the banner: memory.js skips data-enshrined. */}}
+      {{if .Enshrined}}<tr data-pod="{{.Name}}" data-enshrined class="memory-enshrined">{{else}}<tr data-pod="{{.Name}}"{{if .HasMemory}} data-memory-scope class="{{.Memory.Class}}"{{end}}>{{end}}
         <td>{{.Name}}</td>
         <td>{{.Namespace}}</td>
         <td><span class="badge {{.BadgeClass}}">{{.Cause}}</span></td>
         <td>{{.RestartCount}}</td>
         <td>{{.LastDeath}}</td>
-        <td class="memory-cell">{{if .HasMemory}}<span class="memory-count {{.Memory.Class}}" data-memory-main data-memory-banner data-memory-left="{{.Memory.Left}}" title="{{.MemoryReason}}">{{.Memory.Text}}</span>{{else}}<span class="memory-none">{{T "memory_none"}}</span>{{end}}</td>
+        <td class="memory-cell">{{if .Enshrined}}<a class="memory-enshrined-link" href="{{.AltarURL}}" title="{{T "enshrined_title"}}">{{T "enshrined"}}</a>{{if .HasMemory}} <span class="memory-count" data-enshrined data-memory-left="{{.Memory.Left}}" title="{{.MemoryReason}}">{{.Memory.Text}}</span>{{end}}{{else if .HasMemory}}<span class="memory-count {{.Memory.Class}}" data-memory-main data-memory-banner data-memory-left="{{.Memory.Left}}" title="{{.MemoryReason}}">{{.Memory.Text}}</span>{{else}}<span class="memory-none">{{T "memory_none"}}</span>{{end}}</td>
         <td>
           <form method="post" action="/api/seances">
             <input type="hidden" name="ns" value="{{.Namespace}}">

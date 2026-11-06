@@ -96,7 +96,7 @@ type pageSet struct {
 	// list renders the spirit list. seance renders the séance page and its turn fragments.
 	list   *template.Template
 	seance *template.Template
-	// graveyard renders the tombstone grid, tomb one tombstone.
+	// graveyard renders the ofrenda, tomb the photo page of one tombstone.
 	graveyard *template.Template
 	tomb      *template.Template
 }
@@ -114,10 +114,10 @@ func parsePageSet(lang string) (*pageSet, error) {
 	if ps.seance, err = parse("templates/layout.html", "templates/seance.html", "templates/turn.html", "templates/postmortem.html", "templates/spell.html"); err != nil {
 		return nil, fmt.Errorf("parse %s séance templates: %w", lang, err)
 	}
-	if ps.graveyard, err = parse("templates/layout.html", "templates/graveyard.html"); err != nil {
+	if ps.graveyard, err = parse("templates/layout.html", "templates/altar.html", "templates/graveyard.html"); err != nil {
 		return nil, fmt.Errorf("parse %s graveyard templates: %w", lang, err)
 	}
-	if ps.tomb, err = parse("templates/layout.html", "templates/tombstone.html", "templates/postmortem.html"); err != nil {
+	if ps.tomb, err = parse("templates/layout.html", "templates/altar.html", "templates/tombstone.html", "templates/postmortem.html"); err != nil {
 		return nil, fmt.Errorf("parse %s tombstone templates: %w", lang, err)
 	}
 	return &ps, nil
@@ -306,6 +306,11 @@ type spiritRow struct {
 	HasMemory    bool
 	Memory       countdown
 	MemoryReason string
+	// Enshrined is set when the spirit's postmortem is on the altar
+	// (Requirement 15). The row then neither fades nor raises the banner, and
+	// AltarURL links to its photo.
+	Enshrined bool
+	AltarURL  string
 }
 
 // handleSpiritsPage renders the list page. A cluster problem is shown as a notice on a 200 page.
@@ -337,7 +342,7 @@ func (s *Server) handleSpiritsPage(w http.ResponseWriter, r *http.Request) {
 		if lerr != nil {
 			page.Notice = trf(lang, "read_spirits_failed", lerr.Error())
 		}
-		page.Rows = rowsOf(lang, spirits)
+		page.Rows = rowsOf(lang, spirits, s.enshrinedSpirits())
 		page.MemoryBanner = anyFading(page.Rows)
 	}
 
@@ -351,8 +356,9 @@ func (s *Server) handleSpiritsPage(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(buf.Bytes())
 }
 
-// rowsOf formats summaries for the table in lang.
-func rowsOf(lang string, spirits []autopsy.SpiritSummary) []spiritRow {
+// rowsOf formats summaries for the table in lang. Spirits in altar are marked
+// enshrined. A nil altar enshrines nothing.
+func rowsOf(lang string, spirits []autopsy.SpiritSummary, altar enshrined) []spiritRow {
 	rows := make([]spiritRow, 0, len(spirits))
 	for _, sp := range spirits {
 		row := spiritRow{
@@ -368,15 +374,20 @@ func rowsOf(lang string, spirits []autopsy.SpiritSummary) []spiritRow {
 			row.Memory = newCountdown(lang, m.LeftSeconds)
 			row.MemoryReason = m.Key.Reason
 		}
+		if id, ok := altar.lookup(sp.Namespace, sp.Name); ok {
+			row.Enshrined = true
+			row.AltarURL = tombstoneURL(id)
+		}
 		rows = append(rows, row)
 	}
 	return rows
 }
 
-// anyFading reports whether a row's key memory fades in less than 15 minutes.
+// anyFading reports whether a row that is not enshrined has a key memory that
+// fades in less than 15 minutes.
 func anyFading(rows []spiritRow) bool {
 	for _, r := range rows {
-		if r.HasMemory && memoryFading(r.Memory.Left) {
+		if r.HasMemory && !r.Enshrined && memoryFading(r.Memory.Left) {
 			return true
 		}
 	}

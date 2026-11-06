@@ -211,11 +211,11 @@ func TestRowsSignatureIgnoresSecondsLeft(t *testing.T) {
 			Memory: &autopsy.Memory{Key: &autopsy.FadingEvent{Reason: "BackOff", FadesAt: at}, LeftSeconds: left},
 		}}
 	}
-	a := rowsSignature(llm.LangZH, mk(1200, fades))
-	if b := rowsSignature(llm.LangZH, mk(1100, fades)); a != b {
+	a := rowsSignature(llm.LangZH, mk(1200, fades), nil)
+	if b := rowsSignature(llm.LangZH, mk(1100, fades), nil); a != b {
 		t.Errorf("signature changed with the seconds left only:\n%s\n%s", a, b)
 	}
-	if c := rowsSignature(llm.LangZH, mk(1200, fades.Add(time.Minute))); a == c {
+	if c := rowsSignature(llm.LangZH, mk(1200, fades.Add(time.Minute)), nil); a == c {
 		t.Error("signature did not change when the key memory moved")
 	}
 }

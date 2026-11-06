@@ -1,24 +1,26 @@
-{{define "content"}}<section id="page" class="graveyard">
+{{define "content"}}<section id="page" class="ofrenda-page">
+  {{template "papel_picado"}}
   <h1>{{T "gy_title"}}</h1>
   <p class="graveyard-intro">{{T "gy_intro"}}</p>
 
   {{if .Notice}}
   <div class="notice" role="alert"><p>{{.Notice}}</p></div>
-  {{else if .Stones}}
-  <ul class="tombs">
-    {{range .Stones}}
-    <li class="tomb">
-      <a class="tomb-link" href="{{.URL}}">
-        <span class="tomb-rip">R.I.P.</span>
-        <span class="tomb-name">{{.Pod}}</span>
-        <span class="tomb-ns">{{.Namespace}}</span>
-        <span class="badge {{.BadgeClass}}">{{.Cause}}</span>
-        <span class="tomb-dates"><span>{{Tf "born" .Born}}</span><span>{{Tf "died" .Died}}</span></span>
-        <span class="tomb-epitaph">“{{.Epitaph}}”</span>
-      </a>
-    </li>
+  {{else if .Tiers}}
+  <div class="ofrenda">
+    {{range .Tiers}}
+    <section class="altar-tier altar-tier-{{.Level}}" aria-label="{{Tf "altar_tier" .Level}}">
+      <ul class="altar-photos">
+        {{range .Stones}}
+        <li class="altar-photo">
+          <a class="photo" href="{{.URL}}">{{template "altar_photo" .}}</a>
+        </li>
+        {{end}}
+      </ul>
+      {{template "altar_step"}}
+    </section>
     {{end}}
-  </ul>
+    {{template "petal_path"}}
+  </div>
   {{else}}
   <p>{{T "gy_empty"}}</p>
   {{end}}

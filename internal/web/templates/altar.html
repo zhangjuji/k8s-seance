@@ -1,0 +1,23 @@
+{{/* Pieces of the ofrenda (Requirement 15), shared by the altar and the photo page.
+     Everything is drawn by static/style.css: no images, no fonts, no script. */}}
+
+{{define "papel_picado"}}<div class="papel-picado" aria-hidden="true">
+  <span class="papel papel-1"></span><span class="papel papel-2"></span><span class="papel papel-3"></span><span class="papel papel-4"></span><span class="papel papel-5"></span><span class="papel papel-6"></span><span class="papel papel-7"></span><span class="papel papel-8"></span><span class="papel papel-9"></span>
+</div>{{end}}
+
+{{define "altar_step"}}<div class="altar-step" aria-hidden="true">
+  <span class="altar-candle altar-candle-left"><span class="altar-flame"></span></span>
+  <span class="altar-candle altar-candle-right"><span class="altar-flame"></span></span>
+</div>{{end}}
+
+{{define "petal_path"}}<div class="petal-path" aria-hidden="true"></div>{{end}}
+
+{{/* altar_photo is one framed photo. The portrait is a CSS silhouette tinted by the cause. */}}
+{{define "altar_photo"}}<span class="photo-frame"><span class="photo-portrait portrait-{{.BadgeClass}}" aria-hidden="true"></span></span>
+<span class="photo-caption">
+  <span class="photo-name">{{.Pod}}</span>
+  <span class="photo-ns">{{.Namespace}}</span>
+  <span class="badge {{.BadgeClass}}">{{.Cause}}</span>
+  <span class="photo-dates"><span>{{Tf "born" .Born}}</span><span>{{Tf "died" .Died}}</span></span>
+  {{if .Epitaph}}<span class="photo-epitaph">“{{.Epitaph}}”</span>{{end}}
+</span>{{end}}

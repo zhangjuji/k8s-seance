@@ -380,43 +380,238 @@ tbody tr:hover { background: rgba(255, 179, 71, 0.04); }
 }
 .finish { margin-top: 1rem; }
 
-/* Graveyard (task 8): a grid of tombstones, the most recent death first. */
-.graveyard-intro { color: var(--muted); }
-.tombs {
-  list-style: none;
-  margin: 1rem 0 0;
-  padding: 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
-  gap: 1rem;
+/* Ofrenda (task 15, Requirement 15): the graveyard is a Día de los Muertos
+   altar drawn only with CSS. Folk elements only: papel picado (cut paper
+   flags), stepped tiers, framed photos, candles and a cempasúchil (marigold)
+   petal path. No film characters, songs, names or artwork. */
+:root {
+  --marigold: #f29b1d;
+  --marigold-deep: #d9700f;
+  --papel-1: #e04f7a;
+  --papel-2: #f29b1d;
+  --papel-3: #8e5bd6;
+  --papel-4: #2fa58a;
+  --papel-5: #3d8be0;
+  --altar-cloth: #5b2236;
+  --altar-cloth-edge: #3a1524;
+  --frame-wood: #8a5a2b;
+  --frame-gold: #d8b25a;
 }
-.tomb-link,
-.tomb-single {
+.graveyard-intro { color: var(--muted); }
+.ofrenda-page h1 { text-align: center; margin-top: 0.4rem; }
+.ofrenda-page .graveyard-intro { text-align: center; max-width: 42rem; margin: 0 auto 1rem; }
+
+/* Papel picado: a string of flags. Each flag has a notched bottom (clip-path)
+   and cut-out holes (dots in the page colour), and sways a little. */
+.papel-picado {
+  display: flex;
+  justify-content: center;
+  gap: 0.35rem;
+  padding-top: 0.35rem;
+  border-top: 2px solid var(--line-strong);
+  margin: 0 auto 0.5rem;
+  max-width: 48rem;
+  overflow: hidden;
+}
+.papel {
+  flex: 0 0 auto;
+  width: clamp(1.8rem, 7vw, 3.6rem);
+  height: clamp(2.2rem, 8vw, 4rem);
+  background:
+    radial-gradient(circle at 50% 38%, var(--bg) 0 14%, transparent 15%),
+    radial-gradient(circle at 25% 22%, var(--bg) 0 7%, transparent 8%),
+    radial-gradient(circle at 75% 22%, var(--bg) 0 7%, transparent 8%),
+    radial-gradient(circle at 25% 60%, var(--bg) 0 6%, transparent 7%),
+    radial-gradient(circle at 75% 60%, var(--bg) 0 6%, transparent 7%),
+    var(--papel-1);
+  clip-path: polygon(0 0, 100% 0, 100% 82%, 87% 100%, 75% 82%, 62% 100%, 50% 82%, 37% 100%, 25% 82%, 12% 100%, 0 82%);
+  opacity: 0.88;
+  transform-origin: 50% 0;
+  animation: papel-sway 5s ease-in-out infinite alternate;
+}
+.papel-2, .papel-7 { background-color: var(--papel-2); animation-delay: -1s; }
+.papel-3, .papel-8 { background-color: var(--papel-3); animation-delay: -2s; }
+.papel-4, .papel-9 { background-color: var(--papel-4); animation-delay: -3s; }
+.papel-5 { background-color: var(--papel-5); animation-delay: -4s; }
+.papel-6 { animation-delay: -2.5s; }
+@keyframes papel-sway {
+  from { transform: rotate(-2.5deg); }
+  to { transform: rotate(2.5deg); }
+}
+
+/* The altar: tiers get wider towards the bottom, like steps. */
+.ofrenda {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.35rem;
-  text-align: center;
-  padding: 1.4rem 1rem 1rem;
-  background: linear-gradient(180deg, var(--bg-3), var(--bg-2));
-  border: 1px solid var(--line-strong);
-  border-radius: 45% 45% 0.4rem 0.4rem / 28% 28% 0.4rem 0.4rem;
+  margin: 1rem auto 0;
+  max-width: 72rem;
+}
+.altar-tier {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.altar-tier-1 { max-width: 46rem; }
+.altar-tier-2 { max-width: 58rem; }
+.altar-tier-3 { max-width: 70rem; }
+.altar-photos {
+  list-style: none;
+  margin: 0;
+  padding: 0 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 0.9rem;
+  position: relative;
+  z-index: 1;
+}
+.altar-photo { flex: 0 1 12.5rem; min-width: 10rem; }
+
+/* The step: an altar cloth with a marigold fringe and a candle at each end. */
+.altar-step {
+  position: relative;
+  width: 100%;
+  height: 1.6rem;
+  margin: -0.3rem 0 1.4rem;
+  border-radius: 0.2rem;
+  background:
+    radial-gradient(circle at 50% 100%, var(--marigold) 0 0.32rem, transparent 0.34rem) 0 100% / 0.8rem 0.55rem repeat-x,
+    linear-gradient(180deg, var(--altar-cloth), var(--altar-cloth-edge));
+  box-shadow: 0 0.4rem 0.8rem rgba(0, 0, 0, 0.45);
+}
+.altar-candle {
+  position: absolute;
+  bottom: 1.4rem;
+  width: 0.7rem;
+  height: 2.2rem;
+  border-radius: 0.15rem 0.15rem 0.1rem 0.1rem;
+  background: linear-gradient(90deg, #d9c9a6, #fff6e0 45%, #d9c9a6);
+}
+.altar-candle-left { left: 0.6rem; }
+.altar-candle-right { right: 0.6rem; }
+.altar-flame {
+  position: absolute;
+  left: 50%;
+  bottom: 100%;
+  width: 0.55rem;
+  height: 0.9rem;
+  margin-left: -0.275rem;
+  border-radius: 50% 50% 45% 45% / 65% 65% 35% 35%;
+  background: radial-gradient(ellipse at 50% 70%, #fff3c4 0%, #ffcf6b 40%, #ff8a2a 75%, transparent 100%);
+  box-shadow: 0 0 0.7rem 0.25rem var(--glow);
+  animation: candle-flicker 2.6s ease-in-out infinite;
+}
+.altar-candle-right .altar-flame { animation-delay: -1.3s; }
+
+/* Marigold petals leading up to the altar. */
+.petal-path {
+  width: min(14rem, 60%);
+  height: 4.5rem;
+  margin-top: -0.6rem;
+  clip-path: polygon(38% 0, 62% 0, 100% 100%, 0 100%);
+  background:
+    radial-gradient(circle, var(--marigold) 0 0.18rem, transparent 0.2rem) 0 0 / 0.9rem 0.8rem,
+    radial-gradient(circle, var(--marigold-deep) 0 0.15rem, transparent 0.17rem) 0.45rem 0.4rem / 0.9rem 0.8rem;
+  opacity: 0.85;
+}
+
+/* A framed photo: wooden frame, gold inner edge, a silhouette portrait tinted
+   by the cause, and a caption card under it. */
+.photo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.45rem;
+  height: 100%;
+  padding: 0.6rem 0.6rem 0.75rem;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: 0.35rem;
   color: var(--text);
   text-decoration: none;
-  height: 100%;
+  text-align: center;
 }
-.tomb-link:hover,
-.tomb-link:focus-visible {
-  border-color: var(--flame);
+a.photo:hover,
+a.photo:focus-visible {
+  border-color: var(--marigold);
   box-shadow: 0 0 0.9rem 0.2rem var(--glow);
 }
-.tomb-single { max-width: 34rem; margin: 0 auto 1.5rem; }
-.tomb-rip { color: var(--muted); letter-spacing: 0.2em; font-size: 0.8rem; }
-.tomb-name { font-weight: bold; word-break: break-all; font-size: 1rem; margin: 0; }
-.tomb-ns { color: var(--muted); font-size: 0.85rem; }
-.tomb-dates { display: flex; flex-direction: column; font-size: 0.8rem; color: var(--muted); }
-.tomb-epitaph { font-style: italic; color: var(--flame-soft); }
+.photo-frame {
+  display: block;
+  width: 6.5rem;
+  aspect-ratio: 4 / 5;
+  padding: 0.4rem;
+  background: linear-gradient(135deg, var(--frame-wood), #5a3a1b 60%, var(--frame-wood));
+  border-radius: 0.2rem;
+  box-shadow: inset 0 0 0 2px var(--frame-gold), 0 0.3rem 0.6rem rgba(0, 0, 0, 0.5);
+}
+.photo-portrait {
+  --tint: var(--badge-default);
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: radial-gradient(ellipse at 50% 30%, color-mix(in srgb, var(--tint) 55%, #f3e6c8), var(--tint) 80%);
+  filter: sepia(0.25);
+}
+/* Head and shoulders of the silhouette. */
+.photo-portrait::before,
+.photo-portrait::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  background: rgba(18, 16, 22, 0.78);
+}
+.photo-portrait::before {
+  top: 22%;
+  width: 36%;
+  height: 32%;
+  transform: translateX(-50%);
+  border-radius: 50%;
+}
+.photo-portrait::after {
+  bottom: -18%;
+  width: 82%;
+  height: 46%;
+  transform: translateX(-50%);
+  border-radius: 50% 50% 0 0;
+}
+.portrait-badge-oomkilled { --tint: var(--badge-oom); }
+.portrait-badge-crashloopbackoff { --tint: var(--badge-crash); }
+.portrait-badge-imagepullbackoff { --tint: var(--badge-pull); }
+.portrait-badge-probefailure { --tint: var(--badge-probe); }
+.photo-caption { display: flex; flex-direction: column; align-items: center; gap: 0.25rem; }
+.photo-name { font-weight: bold; word-break: break-all; font-size: 0.95rem; margin: 0; color: var(--text); }
+h1.photo-name { font-size: 1.2rem; color: var(--flame-soft); }
+.photo-ns { color: var(--muted); font-size: 0.85rem; }
+.photo-dates { display: flex; flex-direction: column; font-size: 0.78rem; color: var(--muted); }
+.photo-epitaph { font-style: italic; color: var(--flame-soft); font-size: 0.9rem; }
 .pm-tomb { margin-left: 0.75rem; }
+
+/* The photo page of one spirit: the same altar with a single, larger photo. */
+.ofrenda-single .photo-single { max-width: 26rem; padding: 0.9rem 1.2rem 1rem; }
+.ofrenda-single .photo-frame { width: 9rem; }
+.ofrenda-single .altar-tier-1 { max-width: 34rem; }
+.photo-remembered { text-align: center; color: var(--muted); margin: 0.25rem auto 1rem; max-width: 40rem; }
+
+/* Enshrined spirit rows in the list: never faded, marked with a marigold. */
+tbody tr.memory-enshrined { opacity: 1; }
+.memory-enshrined-link { color: var(--marigold); white-space: nowrap; text-decoration: none; }
+.memory-enshrined-link:hover { text-decoration: underline; }
+tr.memory-enshrined .memory-count { margin-left: 0.4rem; }
+
+@media (max-width: 640px) {
+  .altar-photo { flex-basis: 9.5rem; min-width: 8.5rem; }
+  .photo-frame { width: 5rem; }
+  .altar-candle { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .papel, .altar-flame { animation: none; }
+}
 
 /* Summoning bell (live list). */
 .bell-root { margin: 0.75rem 0 1rem; }
