@@ -176,6 +176,17 @@ input:not([type]):focus {
 }
 .notice p { margin: 0.25rem 0; }
 
+/* The séance language differs from the interface language. */
+.lang-notice {
+  padding: 0.4rem 0.75rem;
+  margin: 0.5rem 0 1rem;
+  border: 1px solid var(--banner-line);
+  background: var(--banner-bg);
+  color: var(--banner-text);
+  border-radius: 0.35rem;
+}
+.topbar .lang-switch { margin-left: 0.5rem; }
+
 table { border-collapse: collapse; width: 100%; }
 th, td {
   text-align: left;

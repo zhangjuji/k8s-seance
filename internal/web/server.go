@@ -44,10 +44,20 @@ var errUnknownSource = errors.New("src must be cluster or fixtures")
 // errInvalidNamespace is returned for a namespace that is not a DNS label.
 var errInvalidNamespace = errors.New("invalid namespace: use lowercase letters, digits and '-', at most 63 characters")
 
-// clusterDownError says why the cluster cannot be used. Its text goes to the user as is.
+// clusterDownError says why the cluster cannot be used. Its text goes to the
+// user as is. An empty reason means no cluster connection was configured.
 type clusterDownError struct{ reason string }
 
-func (e *clusterDownError) Error() string { return "连不上集群：" + e.reason }
+func (e *clusterDownError) Error() string { return e.message(llm.LangZH) }
+
+// message is the error text in an interface language.
+func (e *clusterDownError) message(lang string) string {
+	reason := e.reason
+	if reason == "" {
+		reason = tr(lang, "cluster_no_conf")
+	}
+	return trf(lang, "cluster_down", reason)
+}
 
 // Options configures the Web UI.
 type Options struct {
@@ -71,21 +81,56 @@ type Options struct {
 	// Graveyard stores a tombstone for each generated postmortem (Requirement 9).
 	// Nil turns the graveyard off.
 	Graveyard *graveyard.Store
+	// Lang fixes the default interface language (the -lang flag): "zh", "en" or
+	// "" (use Accept-Language). ?lang= and the seance_lang cookie still win.
+	Lang string
+}
+
+// pageSet holds the templates of every page for one interface language. Pages
+// that each define "content" get their own template set.
+type pageSet struct {
+	// list renders the spirit list. seance renders the séance page and its turn fragments.
+	list   *template.Template
+	seance *template.Template
+	// graveyard renders the tombstone grid, tomb one tombstone.
+	graveyard *template.Template
+	tomb      *template.Template
+}
+
+// parsePageSet parses the embedded templates with T and Tf bound to lang.
+func parsePageSet(lang string) (*pageSet, error) {
+	parse := func(files ...string) (*template.Template, error) {
+		return template.New("").Funcs(templateFuncs(lang)).ParseFS(templateFS, files...)
+	}
+	var ps pageSet
+	var err error
+	if ps.list, err = parse("templates/layout.html", "templates/spirits.html"); err != nil {
+		return nil, fmt.Errorf("parse %s templates: %w", lang, err)
+	}
+	if ps.seance, err = parse("templates/layout.html", "templates/seance.html", "templates/turn.html", "templates/postmortem.html"); err != nil {
+		return nil, fmt.Errorf("parse %s séance templates: %w", lang, err)
+	}
+	if ps.graveyard, err = parse("templates/layout.html", "templates/graveyard.html"); err != nil {
+		return nil, fmt.Errorf("parse %s graveyard templates: %w", lang, err)
+	}
+	if ps.tomb, err = parse("templates/layout.html", "templates/tombstone.html", "templates/postmortem.html"); err != nil {
+		return nil, fmt.Errorf("parse %s tombstone templates: %w", lang, err)
+	}
+	return &ps, nil
 }
 
 // Server holds the routes and the parsed page templates.
 type Server struct {
 	opts Options
-	// pages renders the list page. seancePages renders the séance page and its turn fragments.
-	pages       *template.Template
-	seancePages *template.Template
-	// graveyardPages renders the graveyard grid, tombPages one tombstone.
-	graveyardPages *template.Template
-	tombPages      *template.Template
-	mux            *http.ServeMux
-	seances        *seanceStore
-	cache          *llm.OpeningCache
+	// sets holds one pageSet per interface language.
+	sets    map[string]*pageSet
+	mux     *http.ServeMux
+	seances *seanceStore
+	cache   *llm.OpeningCache
 }
+
+// set returns the templates for an interface language.
+func (s *Server) set(lang string) *pageSet { return s.sets[uiLang(lang)] }
 
 // New validates opts, parses the embedded templates and registers the routes.
 func New(opts Options) (*Server, error) {
@@ -104,23 +149,21 @@ func New(opts Options) (*Server, error) {
 	if opts.Provider == nil {
 		opts.Provider = llm.MockProvider{}
 	}
+	if opts.Lang != "" {
+		l := llm.NormalizeLang(opts.Lang)
+		if l == "" {
+			return nil, fmt.Errorf("default language %q: use zh or en", opts.Lang)
+		}
+		opts.Lang = l
+	}
 
-	// The two pages both define "content", so each one gets its own template set.
-	pages, err := template.ParseFS(templateFS, "templates/layout.html", "templates/spirits.html")
-	if err != nil {
-		return nil, fmt.Errorf("parse templates: %w", err)
-	}
-	seancePages, err := template.ParseFS(templateFS, "templates/layout.html", "templates/seance.html", "templates/turn.html", "templates/postmortem.html")
-	if err != nil {
-		return nil, fmt.Errorf("parse séance templates: %w", err)
-	}
-	graveyardPages, err := template.ParseFS(templateFS, "templates/layout.html", "templates/graveyard.html")
-	if err != nil {
-		return nil, fmt.Errorf("parse graveyard templates: %w", err)
-	}
-	tombPages, err := template.ParseFS(templateFS, "templates/layout.html", "templates/tombstone.html", "templates/postmortem.html")
-	if err != nil {
-		return nil, fmt.Errorf("parse tombstone templates: %w", err)
+	sets := make(map[string]*pageSet, len(uiLangs))
+	for _, lang := range uiLangs {
+		ps, err := parsePageSet(lang)
+		if err != nil {
+			return nil, err
+		}
+		sets[lang] = ps
 	}
 	static, err := fs.Sub(staticFS, "static")
 	if err != nil {
@@ -128,13 +171,10 @@ func New(opts Options) (*Server, error) {
 	}
 
 	s := &Server{
-		opts:           opts,
-		pages:          pages,
-		seancePages:    seancePages,
-		graveyardPages: graveyardPages,
-		tombPages:      tombPages,
-		seances:        newSeanceStore(),
-		cache:          &llm.OpeningCache{},
+		opts:    opts,
+		sets:    sets,
+		seances: newSeanceStore(),
+		cache:   &llm.OpeningCache{},
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", s.handleRoot)
@@ -183,7 +223,7 @@ func (s *Server) sourceNamed(name string) (Source, error) {
 		return s.opts.Fixtures, nil
 	}
 	if s.opts.Cluster == nil {
-		reason := "未配置集群连接"
+		var reason string
 		if s.opts.ClusterErr != nil {
 			reason = s.opts.ClusterErr.Error()
 		}
@@ -217,6 +257,7 @@ func (s *Server) list(ctx context.Context, src Source, ns string) ([]autopsy.Spi
 
 // listPage is the data for templates/spirits.html.
 type listPage struct {
+	UI          chrome
 	Title       string
 	Namespace   string
 	SourceName  string
@@ -243,7 +284,8 @@ func (s *Server) handleSpiritsPage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	page := listPage{Title: "亡灵列表", Namespace: ns, SourceName: clusterSource}
+	lang := s.pageLang(w, r)
+	page := listPage{UI: chromeFor(r, lang), Title: tr(lang, "list_title"), Namespace: ns, SourceName: clusterSource}
 
 	src, err := s.source(r)
 	var down *clusterDownError
@@ -252,19 +294,19 @@ func (s *Server) handleSpiritsPage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	case errors.As(err, &down):
-		page.Notice = err.Error()
+		page.Notice = down.message(lang)
 	default:
 		page.SourceName = src.Name()
 		page.FixtureMode = src.Name() == fixturesSource
 		spirits, lerr := s.list(r.Context(), src, ns)
 		if lerr != nil {
-			page.Notice = "读取亡灵失败：" + lerr.Error()
+			page.Notice = trf(lang, "read_spirits_failed", lerr.Error())
 		}
 		page.Rows = rowsOf(spirits)
 	}
 
 	var buf bytes.Buffer
-	if err := s.pages.ExecuteTemplate(&buf, "layout", page); err != nil {
+	if err := s.set(lang).list.ExecuteTemplate(&buf, "layout", page); err != nil {
 		s.opts.Logger.Printf("render spirits page: %v", err)
 		http.Error(w, "render failed", http.StatusInternalServerError)
 		return

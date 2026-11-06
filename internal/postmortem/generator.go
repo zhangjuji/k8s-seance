@@ -491,7 +491,7 @@ func impactLines(a *autopsy.PodAutopsy) []string {
 func lastWords(cause autopsy.CauseOfDeath, podName string, transcript []spirit.Turn) string {
 	if len(transcript) > 0 {
 		t := transcript[0]
-		if t.Role == roleSpirit && t.Content != llm.ExhaustedLine {
+		if t.Role == roleSpirit && !llm.IsExhaustedLine(t.Content) {
 			if s := lastWordsSentence(t.Content, podName); s != "" {
 				return strings.ReplaceAll(s, `"`, "'")
 			}

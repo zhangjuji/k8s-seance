@@ -14,6 +14,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/zhangjuji/k8s-seance/internal/autopsy"
+	"github.com/zhangjuji/k8s-seance/internal/llm"
 )
 
 const (
@@ -41,6 +42,9 @@ type createRequest struct {
 	NS  string `json:"ns"`
 	Pod string `json:"pod"`
 	Src string `json:"src"`
+	// Lang is the séance language, "zh" or "en". Empty means the interface
+	// language of the request.
+	Lang string `json:"lang"`
 }
 
 // createResponse is the 201 body of POST /api/seances.
@@ -48,6 +52,7 @@ type createResponse struct {
 	ID        string `json:"id"`
 	Pod       string `json:"pod"`
 	Cause     string `json:"cause"`
+	Lang      string `json:"lang"`
 	StreamURL string `json:"streamUrl"`
 	PageURL   string `json:"pageUrl"`
 }
@@ -67,6 +72,7 @@ type seanceDetail struct {
 	Pod             string           `json:"pod"`
 	NS              string           `json:"ns"`
 	Cause           string           `json:"cause"`
+	Lang            string           `json:"lang"`
 	Transcript      []transcriptItem `json:"transcript"`
 	BudgetUsed      int              `json:"budgetUsed"`
 	BudgetRemaining int              `json:"budgetRemaining"`
@@ -106,6 +112,13 @@ func (s *Server) handleCreateSeance(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, http.StatusBadRequest, "pod is required")
 		return
 	}
+	lang := s.requestLang(r)
+	if req.Lang != "" {
+		if lang = llm.NormalizeLang(req.Lang); lang == "" {
+			s.fail(w, r, http.StatusBadRequest, "lang must be zh or en")
+			return
+		}
+	}
 
 	src, err := s.sourceNamed(req.Src)
 	var down *clusterDownError
@@ -114,7 +127,7 @@ func (s *Server) handleCreateSeance(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, http.StatusBadRequest, err.Error())
 		return
 	case errors.As(err, &down):
-		s.fail(w, r, http.StatusServiceUnavailable, err.Error())
+		s.fail(w, r, http.StatusServiceUnavailable, down.message(s.requestLang(r)))
 		return
 	case err != nil:
 		s.fail(w, r, http.StatusInternalServerError, err.Error())
@@ -130,7 +143,7 @@ func (s *Server) handleCreateSeance(w http.ResponseWriter, r *http.Request) {
 		return
 	case err != nil:
 		s.opts.Logger.Printf("collect %s/%s from %s: %v", ns, req.Pod, src.Name(), err)
-		s.fail(w, r, http.StatusServiceUnavailable, "读取亡灵失败："+err.Error())
+		s.fail(w, r, http.StatusServiceUnavailable, trf(s.requestLang(r), "read_spirits_failed", err.Error()))
 		return
 	}
 
@@ -147,13 +160,14 @@ func (s *Server) handleCreateSeance(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, http.StatusInternalServerError, "create séance failed")
 		return
 	}
-	se := s.newSeance(id, src.Name(), a, cls, ev)
+	se := s.newSeance(id, src.Name(), lang, a, cls, ev)
 	s.seances.add(se)
 
 	res := createResponse{
 		ID:        id,
 		Pod:       a.Name,
 		Cause:     string(cls.Cause),
+		Lang:      se.lang,
 		StreamURL: seanceStreamURL(id),
 		PageURL:   seancePageURL(id),
 	}
@@ -185,6 +199,7 @@ func (s *Server) handleGetSeance(w http.ResponseWriter, r *http.Request) {
 		Pod:             se.pod,
 		NS:              se.ns,
 		Cause:           string(se.cause),
+		Lang:            se.lang,
 		Transcript:      transcript,
 		BudgetUsed:      used,
 		BudgetRemaining: left,
@@ -285,13 +300,13 @@ func (s *Server) handleMessage(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	if err := se.ensureOpening(ctx); err != nil {
 		s.opts.Logger.Printf("opening for séance %s: %v", se.id, err)
-		s.fail(w, r, http.StatusBadGateway, "亡灵没有应答，请稍后再试。")
+		s.fail(w, r, http.StatusBadGateway, tr(s.requestLang(r), "no_answer"))
 		return
 	}
 	res, err := se.ask(ctx, text)
 	if err != nil {
 		s.opts.Logger.Printf("question in séance %s: %v", se.id, err)
-		s.fail(w, r, http.StatusBadGateway, "亡灵没有应答，请稍后再试。")
+		s.fail(w, r, http.StatusBadGateway, tr(s.requestLang(r), "no_answer"))
 		return
 	}
 
@@ -347,7 +362,7 @@ func (s *Server) handlePostmortem(w http.ResponseWriter, r *http.Request) {
 	doc, err := se.postmortemFor(ctx, true)
 	if err != nil {
 		s.opts.Logger.Printf("postmortem for séance %s: %v", se.id, err)
-		s.fail(w, r, http.StatusGatewayTimeout, "复盘生成超时，请稍后再试。")
+		s.fail(w, r, http.StatusGatewayTimeout, tr(s.requestLang(r), "pm_timeout"))
 		return
 	}
 
@@ -363,7 +378,7 @@ func (s *Server) handlePostmortem(w http.ResponseWriter, r *http.Request) {
 	case r.Header.Get("HX-Request") != "":
 		var buf bytes.Buffer
 		v := postmortemView{Markdown: doc.markdown, Mode: doc.mode, Reason: doc.reason, DownloadURL: seanceDownloadURL(se.id), TombstoneURL: tombstoneURL(doc.tombID)}
-		if err := s.seancePages.ExecuteTemplate(&buf, "postmortem", v); err != nil {
+		if err := s.set(s.requestLang(r)).seance.ExecuteTemplate(&buf, "postmortem", v); err != nil {
 			s.opts.Logger.Printf("render postmortem %s: %v", se.id, err)
 			http.Error(w, "render failed", http.StatusInternalServerError)
 			return
@@ -388,7 +403,7 @@ func (s *Server) handlePostmortemDownload(w http.ResponseWriter, r *http.Request
 	doc, err := se.postmortemFor(ctx, false)
 	if err != nil {
 		s.opts.Logger.Printf("postmortem for séance %s: %v", se.id, err)
-		s.fail(w, r, http.StatusGatewayTimeout, "复盘生成超时，请稍后再试。")
+		s.fail(w, r, http.StatusGatewayTimeout, tr(s.requestLang(r), "pm_timeout"))
 		return
 	}
 	name := "postmortem-" + fileSafe(se.pod) + "-" + doc.at.Format("20060102") + ".md"
@@ -417,7 +432,8 @@ func (s *Server) handleSeancePage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var buf bytes.Buffer
-	if err := s.seancePages.ExecuteTemplate(&buf, "layout", se.pageData()); err != nil {
+	lang := s.pageLang(w, r)
+	if err := s.set(lang).seance.ExecuteTemplate(&buf, "layout", se.pageData(r, lang)); err != nil {
 		s.opts.Logger.Printf("render séance page %s: %v", se.id, err)
 		http.Error(w, "render failed", http.StatusInternalServerError)
 		return
@@ -459,9 +475,11 @@ func readCreateRequest(w http.ResponseWriter, r *http.Request) (createRequest, e
 		req.NS = r.PostForm.Get("ns")
 		req.Pod = r.PostForm.Get("pod")
 		req.Src = r.PostForm.Get("src")
+		req.Lang = r.PostForm.Get("lang")
 	}
 	req.NS = strings.TrimSpace(req.NS)
 	req.Pod = strings.TrimSpace(req.Pod)
+	req.Lang = strings.TrimSpace(req.Lang)
 	return req, nil
 }
 

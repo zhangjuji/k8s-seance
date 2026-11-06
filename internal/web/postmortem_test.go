@@ -138,7 +138,7 @@ func TestPostmortemTemplateNoteAndEscaping(t *testing.T) {
 		Reason:      "budget_exhausted",
 		DownloadURL: "/d.md",
 	}
-	if err := srv.seancePages.ExecuteTemplate(&buf, "postmortem", v); err != nil {
+	if err := srv.set(llm.LangZH).seance.ExecuteTemplate(&buf, "postmortem", v); err != nil {
 		t.Fatalf("render: %v", err)
 	}
 	html := buf.String()

@@ -69,14 +69,14 @@
   - [x]* 8.2 墓地页面：墓碑网格、点开看复盘
     - _Requirements: 9.2, 9.3_
 
-- [ ] 10. 英文演示路径
-  - [ ] 10.1 `internal/llm`：`Lang` 字段、`NormalizeLang`、英文额度耗尽台词、开场缓存 key 加语言、英文 mock 开场白
+- [x] 10. 英文演示路径
+  - [x] 10.1 `internal/llm`：`Lang` 字段、`NormalizeLang`、英文额度耗尽台词、开场缓存 key 加语言、英文 mock 开场白
     - _Requirements: 10.3_
-  - [ ] 10.2 `internal/spirit`：`NewSessionIn(lang, …)`、英文开场请求、`<pod>-en` 回放文件、提示词语言规则（中文提示词不变）
+  - [x] 10.2 `internal/spirit`：`NewSessionIn(lang, …)`、英文开场请求、`<pod>-en` 回放文件、提示词语言规则（中文提示词不变）
     - _Requirements: 10.3, 10.5_
-  - [ ] 10.3 `internal/web`：文案目录 `i18n.go`、每种语言一套模板、`?lang=` + cookie + `Accept-Language`、`-lang` 参数、语言不一致提示
+  - [x] 10.3 `internal/web`：文案目录 `i18n.go`、每种语言一套模板、`?lang=` + cookie + `Accept-Language`、`-lang` 参数、语言不一致提示
     - _Requirements: 10.1, 10.2, 10.4_
-  - [ ] 10.4 用真实接口录制英文回放 `fixtures/replay/<pod>-en.json`（`demo/record-english.sh`，deepseek-flash）
+  - [x] 10.4 用真实接口录制英文回放 `fixtures/replay/<pod>-en.json`（`demo/record-english.sh`，deepseek-flash）
     - _Requirements: 10.3_
 
 - [ ] 11. 谎言检测

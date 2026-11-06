@@ -11,6 +11,7 @@ import (
 	"text/template"
 
 	"github.com/zhangjuji/k8s-seance/internal/autopsy"
+	"github.com/zhangjuji/k8s-seance/internal/llm"
 )
 
 //go:embed prompts
@@ -42,7 +43,19 @@ type PromptData struct {
 	Cause     autopsy.CauseOfDeath
 	DeathTime string
 	Evidence  []autopsy.Evidence
+	// Lang is the séance language. Only llm.LangEN changes the prompt: it adds
+	// englishRule at the end. Any other value renders the Chinese prompt as is.
+	Lang string
 }
+
+// englishRule is appended to the system prompt of an English séance. The
+// Chinese prompt does not get it, so its bytes and the golden files stay the same.
+const englishRule = `
+
+## Language
+
+This séance is held in English. Give the opening statement in English, and use no Chinese characters or Chinese punctuation in it. For follow-up questions, rule 6 still applies: answer in the language of the question. When the evidence has no record of something, say "The underworld kept no record of that."
+`
 
 // promptView is the value the persona template is executed with.
 type promptView struct {
@@ -101,6 +114,9 @@ func SystemPrompt(d PromptData) (string, error) {
 	var buf bytes.Buffer
 	if err := tmpl.Execute(&buf, view); err != nil {
 		return "", fmt.Errorf("spirit: render persona: %w", err)
+	}
+	if llm.NormalizeLang(d.Lang) == llm.LangEN {
+		buf.WriteString(strings.TrimPrefix(englishRule, "\n"))
 	}
 	return buf.String(), nil
 }

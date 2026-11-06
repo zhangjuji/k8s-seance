@@ -41,6 +41,16 @@ var voiceLines = map[autopsy.CauseOfDeath]string{
 	autopsy.CauseUnknown:          "冥界的记录有些模糊，我也说不清自己是怎么死的。",
 }
 
+// voiceLinesEN is voiceLines for an English séance.
+var voiceLinesEN = map[autopsy.CauseOfDeath]string{
+	autopsy.CauseOOMKilled:        "My memory filled up bit by bit. As I suffocated, I grew heavier and heavier.",
+	autopsy.CauseCrashLoopBackOff: "They keep dragging me back to the world. I rise and fall again and again, a funeral nobody will stop.",
+	autopsy.CauseImagePullBackOff: "I never truly lived. My image could not be pulled, so I never even got a birth certificate.",
+	autopsy.CauseProbeFailure:     "They thought I was dead, so they really killed me. Each time the probe knocked, I could not answer.",
+	autopsy.CauseError:            "My process stopped where it should not have stopped.",
+	autopsy.CauseUnknown:          "The records of the underworld are blurred. I cannot say how I died.",
+}
+
 // MockProvider builds a fixed line from the cause and the evidence, then streams it.
 // Delay is the pause after each fragment. Zero means no sleep.
 type MockProvider struct {
@@ -107,14 +117,36 @@ func mockText(req ChatRequest) string {
 }
 
 // openingText is the ghost's first line: the voice, the time of death when it is
-// known, and the strongest evidence.
+// known, and the strongest evidence. The language follows req.Lang.
 func openingText(req ChatRequest) string {
 	picked := pickEvidence(req.Cause, req.Evidence)
+	if langOrDefault(req.Lang) == LangEN {
+		return openingTextEN(req, picked)
+	}
 	death := deathLine(req.DeathTime)
 	if len(picked) == 0 {
 		return voiceFor(req.Cause) + death + noRecord
 	}
 	return voiceFor(req.Cause) + death + "证据在此：" + citation(picked, false) + "。"
+}
+
+// openingTextEN is openingText for an English séance. It uses no CJK punctuation.
+func openingTextEN(req ChatRequest, picked []autopsy.Evidence) string {
+	s := voiceForEN(req.Cause)
+	if req.DeathTime != "" {
+		s += " I died at " + req.DeathTime + "."
+	}
+	if len(picked) == 0 {
+		return s + " " + recordLine(true)
+	}
+	return s + " The evidence: " + citation(picked, true) + "."
+}
+
+func voiceForEN(cause autopsy.CauseOfDeath) string {
+	if v, ok := voiceLinesEN[cause]; ok {
+		return v
+	}
+	return voiceLinesEN[autopsy.CauseUnknown]
 }
 
 // deathLine returns the time-of-death sentence, or "" when the time is unknown.

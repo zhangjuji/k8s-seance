@@ -3,7 +3,7 @@
 //
 // Usage:
 //
-//	seance [-addr localhost:6660] [-n namespace] [-kubeconfig path] [-tail 200] [-graveyard path] [-fixtures] [-replay | -mock]
+//	seance [-addr localhost:6660] [-n namespace] [-kubeconfig path] [-tail 200] [-graveyard path] [-lang zh|en] [-fixtures] [-replay | -mock]
 //	seance summon [-n namespace] [-kubeconfig path] [-pod name] [-tail 200] [-fixtures] [-replay | -mock]
 //
 // The command is read-only: it only lists and gets Pods, reads their logs and
@@ -19,6 +19,9 @@
 // so only missing turns reach the API.
 // Each generated postmortem also becomes a tombstone in the local graveyard file
 // (-graveyard, default ~/.k8s-seance/graveyard.json; an empty value turns it off).
+// The Web UI is in Chinese or English: ?lang=zh|en, then the seance_lang cookie,
+// then -lang, then the browser's Accept-Language. A séance summoned from the
+// English UI is held in English and replays fixtures/replay/<pod>-en.json.
 package main
 
 import (
@@ -79,8 +82,9 @@ func runServe(args []string) error {
 	useReplay := fs.Bool("replay", false, "LLM replies from fixtures/replay (falls back to mock per turn)")
 	useMock := fs.Bool("mock", false, "LLM replies from the built-in template, no API calls")
 	graveyardPath := fs.String("graveyard", defaultGraveyardPath(), "tombstone file for generated postmortems (empty: graveyard off)")
+	uiLang := fs.String("lang", "", "default UI language, zh or en (empty: from the browser's Accept-Language)")
 	fs.Usage = func() {
-		fmt.Fprintf(fs.Output(), "Usage: seance [-addr localhost:6660] [-n namespace] [-kubeconfig path] [-tail 200] [-graveyard path] [-fixtures] [-replay | -mock]\n       seance summon [flags]   print autopsies to stdout\n\n")
+		fmt.Fprintf(fs.Output(), "Usage: seance [-addr localhost:6660] [-n namespace] [-kubeconfig path] [-tail 200] [-graveyard path] [-lang zh|en] [-fixtures] [-replay | -mock]\n       seance summon [flags]   print autopsies to stdout\n\n")
 		fs.PrintDefaults()
 	}
 	_ = fs.Parse(args) // ExitOnError: bad flags exit with status 2, -h with 0.
@@ -88,6 +92,10 @@ func runServe(args []string) error {
 	mode, err := selectMode(*useReplay, *useMock)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "seance:", err)
+		os.Exit(2)
+	}
+	if *uiLang != "" && llm.NormalizeLang(*uiLang) == "" {
+		fmt.Fprintf(os.Stderr, "seance: -lang %q: use zh or en\n", *uiLang)
 		os.Exit(2)
 	}
 	logger := log.New(os.Stderr, "seance: ", 0)
@@ -106,6 +114,7 @@ func runServe(args []string) error {
 		Model:            cfg.Model,
 		Logger:           logger,
 		Graveyard:        grave,
+		Lang:             *uiLang,
 	})
 	if err != nil {
 		return err

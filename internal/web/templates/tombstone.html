@@ -1,13 +1,13 @@
 {{define "content"}}<section id="page" class="tombstone">
-  <p><a href="/graveyard">← 回到墓地</a></p>
+  <p><a href="/graveyard">{{T "tomb_back"}}</a></p>
   <header class="tomb tomb-single">
     <span class="tomb-rip">R.I.P.</span>
     <h1 class="tomb-name">{{.Stone.Pod}}</h1>
     <span class="tomb-ns">{{.Stone.Namespace}}</span>
     <span class="badge {{.Stone.BadgeClass}}">{{.Stone.Cause}}</span>
-    <span class="tomb-dates"><span>生：{{.Stone.Born}}</span><span>卒：{{.Stone.Died}}</span></span>
+    <span class="tomb-dates"><span>{{Tf "born" .Stone.Born}}</span><span>{{Tf "died" .Stone.Died}}</span></span>
     <span class="tomb-epitaph">“{{.Stone.Epitaph}}”</span>
   </header>
-  <h2>复盘</h2>
+  <h2>{{T "pm_heading"}}</h2>
   {{template "postmortem" .PM}}
 </section>{{end}}

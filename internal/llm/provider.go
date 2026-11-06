@@ -40,6 +40,39 @@ type ChatRequest struct {
 	Purpose string
 	// DeathTime is the formatted time of death, or empty when it is unknown.
 	DeathTime string
+	// Lang is the séance language, LangZH or LangEN. Empty means LangZH. The
+	// mock opening and the budget-exhausted line follow it. Follow-up mock
+	// answers still follow the language of the question.
+	Lang string
+}
+
+// Séance languages.
+const (
+	LangZH = "zh"
+	LangEN = "en"
+)
+
+// NormalizeLang maps a language tag to LangZH or LangEN. It accepts the bare
+// codes and region forms in any case, such as "en", "EN", "en-US", "zh_CN" and
+// "zh-Hans". Anything else, including "", returns "".
+func NormalizeLang(tag string) string {
+	tag = strings.ToLower(strings.TrimSpace(tag))
+	primary, _, _ := strings.Cut(strings.ReplaceAll(tag, "_", "-"), "-")
+	switch primary {
+	case LangZH:
+		return LangZH
+	case LangEN:
+		return LangEN
+	}
+	return ""
+}
+
+// langOrDefault returns NormalizeLang(tag), or LangZH when the tag is not recognized.
+func langOrDefault(tag string) string {
+	if l := NormalizeLang(tag); l != "" {
+		return l
+	}
+	return LangZH
 }
 
 // Usage holds the token counts of one call. The mock provider reports rough rune counts.

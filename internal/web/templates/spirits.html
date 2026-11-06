@@ -1,21 +1,21 @@
 {{define "content"}}<section id="page">
-  <h1>亡灵列表</h1>
+  <h1>{{T "list_title"}}</h1>
 
   {{if .FixtureMode}}
-  <div class="banner">样例模式：亡灵来自内置 fixtures，不连接集群。样例不区分命名空间，列出全部 {{len .Rows}} 个亡灵。</div>
+  <div class="banner">{{Tf "fixture_banner" (len .Rows)}}</div>
   {{else}}
   <form method="get" action="/spirits"
         hx-get="/spirits" hx-target="#page" hx-select="#page" hx-swap="outerHTML" hx-push-url="true">
-    <label for="ns">命名空间</label>
+    <label for="ns">{{T "ns_label"}}</label>
     <input id="ns" name="ns" type="text" value="{{.Namespace}}" autocomplete="off" required>
-    <button type="submit">切换</button>
+    <button type="submit">{{T "ns_switch"}}</button>
   </form>
   {{end}}
 
   {{if .Notice}}
   <div class="notice" role="alert">
     <p>{{.Notice}}</p>
-    <p><a href="/spirits?src=fixtures">进入样例模式（离线 fixtures，不连接集群）</a></p>
+    <p><a href="/spirits?src=fixtures">{{T "fixtures_link"}}</a></p>
   </div>
   {{end}}
 
@@ -23,11 +23,11 @@
   <table>
     <thead>
       <tr>
-        <th>名称</th>
-        <th>命名空间</th>
-        <th>死因</th>
-        <th>重启次数</th>
-        <th>最近死亡（UTC）</th>
+        <th>{{T "col_name"}}</th>
+        <th>{{T "col_ns"}}</th>
+        <th>{{T "col_cause"}}</th>
+        <th>{{T "col_restarts"}}</th>
+        <th>{{T "col_last_death"}}</th>
         <th></th>
       </tr>
     </thead>
@@ -44,7 +44,8 @@
             <input type="hidden" name="ns" value="{{.Namespace}}">
             <input type="hidden" name="pod" value="{{.Name}}">
             <input type="hidden" name="src" value="{{$.SourceName}}">
-            <button type="submit">召唤</button>
+            <input type="hidden" name="lang" value="{{$.UI.Lang}}">
+            <button type="submit">{{T "summon"}}</button>
           </form>
         </td>
       </tr>
@@ -52,6 +53,6 @@
     </tbody>
   </table>
   {{else if not .Notice}}
-  <p>这里没有亡灵。</p>
+  <p>{{T "no_spirits"}}</p>
   {{end}}
 </section>{{end}}

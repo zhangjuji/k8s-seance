@@ -1,10 +1,10 @@
-{{define "postmortem"}}<section class="postmortem" aria-label="复盘">
+{{define "postmortem"}}<section class="postmortem" aria-label="{{T "pm_aria"}}">
   <div class="pm-bar">
-    <button type="button" id="pm-copy">复制</button>
-    <a class="pm-download" href="{{.DownloadURL}}">下载 .md</a>
-    {{if .TombstoneURL}}<a class="pm-tomb" href="{{.TombstoneURL}}">已立碑，去墓地看看</a>{{end}}
+    <button type="button" id="pm-copy">{{T "pm_copy"}}</button>
+    <a class="pm-download" href="{{.DownloadURL}}">{{T "pm_download"}}</a>
+    {{if .TombstoneURL}}<a class="pm-tomb" href="{{.TombstoneURL}}">{{T "pm_tomb"}}</a>{{end}}
   </div>
-  {{if eq .Mode "template"}}<p class="pm-note">这份复盘由模板生成，没有调用亡灵的 LLM（原因：{{.Reason}}）。</p>{{end}}
+  {{if eq .Mode "template"}}<p class="pm-note">{{Tf "pm_note" .Reason}}</p>{{end}}
   <pre id="pm-md">{{.Markdown}}</pre>
   <script>
   (function () {
@@ -12,9 +12,9 @@
     btn.addEventListener('click', function () {
       var text = document.getElementById('pm-md').textContent;
       navigator.clipboard.writeText(text).then(function () {
-        btn.textContent = '已复制';
+        btn.textContent = {{T "pm_copied"}};
       }, function () {
-        btn.textContent = '复制失败';
+        btn.textContent = {{T "pm_copy_failed"}};
       });
     });
   })();

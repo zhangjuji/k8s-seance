@@ -1,19 +1,20 @@
 {{define "layout"}}<!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="{{T "html_lang"}}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{{.Title}} · K8s 降灵会</title>
+<title>{{.Title}} · {{T "app_name"}}</title>
 <link rel="stylesheet" href="/static/style.css">
 <script src="/static/htmx.min.js" defer></script>
 </head>
 <body>
 <header class="topbar">
-  <a href="/spirits"><strong>K8s 降灵会</strong></a>
+  <a href="/spirits"><strong>{{T "app_name"}}</strong></a>
   <nav>
-    <a href="/spirits">集群亡灵</a>
-    <a href="/spirits?src=fixtures">样例模式</a>
-    <a href="/graveyard">墓地</a>
+    <a href="/spirits">{{T "nav_cluster"}}</a>
+    <a href="/spirits?src=fixtures">{{T "nav_fixtures"}}</a>
+    <a href="/graveyard">{{T "nav_graveyard"}}</a>
+    {{with .UI.SwitchURL}}<a class="lang-switch" href="{{.}}" aria-label="{{T "lang_switch_aria"}}">{{T "lang_switch"}}</a>{{end}}
   </nav>
 </header>
 <main>{{template "content" .}}</main>

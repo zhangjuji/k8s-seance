@@ -1,0 +1,15 @@
+{
+  "fixtureId": "lost-soul-5ff5cb8464-hjtms-en",
+  "turns": [
+    {
+      "turnIndex": 0,
+      "cause": "ImagePullBackOff",
+      "lastUser": "Please give your opening statement.",
+      "reply": "I am the spirit of `lost-soul-5ff5cb8464-hjtms`. I died of ImagePullBackOff on 2026-11-01 04:54:22 UTC.\n\nThe evidence is embarrassingly simple: my only container was waiting with `reason=ImagePullBackOff`, because the image `nginx:does-not-exist-666` was never found [E1][E2]. The kubelet tried five times and logged `ErrImagePull` [E7], then backed off sixty-six times [E8][E9], knocking on a door that does not exist [E6]. Not one restart. Not one heartbeat. No previous logs [E10].\n\nI never took a single breath.",
+      "usage": {
+        "inputTokens": 1134,
+        "outputTokens": 175
+      }
+    }
+  ]
+}

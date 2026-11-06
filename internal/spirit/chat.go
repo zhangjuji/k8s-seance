@@ -14,6 +14,11 @@ import (
 const (
 	// openingRequest is the user message that asks the ghost for its opening statement.
 	openingRequest = "请做开场陈述。"
+	// openingRequestEN is openingRequest for an English séance.
+	openingRequestEN = "Please give your opening statement."
+	// englishFixtureSuffix is added to the pod name to form the replay key of an
+	// English séance, so its recordings live in fixtures/replay/<pod>-en.json.
+	englishFixtureSuffix = "-en"
 	// maxReplyTokens is the output limit requested for each spirit reply.
 	maxReplyTokens = 400
 	// roleSpirit and roleUser are the Turn.Role values.
@@ -37,6 +42,9 @@ type Session struct {
 	Class    autopsy.Classification
 	Evidence []autopsy.Evidence
 	Model    string
+	// Lang is the séance language, llm.LangZH or llm.LangEN. It is fixed when
+	// the session starts.
+	Lang string
 
 	budget    *llm.Budget
 	cache     *llm.OpeningCache
@@ -55,16 +63,30 @@ type Session struct {
 	next       int // index of the next follow-up, starting at 1
 }
 
-// NewSession starts a séance for the Pod a. Calls go through a Budget built from p
-// and limits. cache may be nil, in which case openings are never reused. model is
-// part of the opening cache key.
+// NewSession starts a Chinese séance for the Pod a. It is NewSessionIn with llm.LangZH.
 func NewSession(id string, a *autopsy.PodAutopsy, cls autopsy.Classification, ev []autopsy.Evidence, p llm.Provider, limits llm.Limits, cache *llm.OpeningCache, model string) *Session {
+	return NewSessionIn(llm.LangZH, id, a, cls, ev, p, limits, cache, model)
+}
+
+// NewSessionIn starts a séance for the Pod a in lang. A lang that
+// llm.NormalizeLang does not recognize means llm.LangZH. Calls go through a
+// Budget built from p and limits. cache may be nil, in which case openings are
+// never reused. model and lang are part of the opening cache key.
+//
+// An English séance sends an English opening request, adds an English language
+// rule to the system prompt and uses <pod>-en as its replay key. A Chinese
+// séance is unchanged.
+func NewSessionIn(lang, id string, a *autopsy.PodAutopsy, cls autopsy.Classification, ev []autopsy.Evidence, p llm.Provider, limits llm.Limits, cache *llm.OpeningCache, model string) *Session {
+	if lang = llm.NormalizeLang(lang); lang == "" {
+		lang = llm.LangZH
+	}
 	s := &Session{
 		ID:       id,
 		Autopsy:  a,
 		Class:    cls,
 		Evidence: ev,
 		Model:    model,
+		Lang:     lang,
 		budget:   llm.NewBudget(p, limits),
 		cache:    cache,
 		next:     1,
@@ -83,6 +105,7 @@ func NewSession(id string, a *autopsy.PodAutopsy, cls autopsy.Classification, ev
 		Cause:     cls.Cause,
 		DeathTime: s.deathTime,
 		Evidence:  ev,
+		Lang:      lang,
 	})
 	return s
 }
@@ -117,7 +140,7 @@ func (s *Session) Opening(ctx context.Context, onDelta func(string) error) (stri
 	}
 	messages := []llm.Message{
 		{Role: "system", Content: s.system},
-		{Role: "user", Content: openingRequest},
+		{Role: "user", Content: s.openingRequest()},
 	}
 	text, exhausted, err := s.generate(ctx, s.request(messages, llm.PurposeOpening, 0), onDelta)
 	if err != nil {
@@ -131,8 +154,8 @@ func (s *Session) Opening(ctx context.Context, onDelta func(string) error) (stri
 }
 
 // Ask answers one question from the user. It streams the reply to onDelta and
-// returns the full text. When the budget is spent, the reply is llm.ExhaustedLine
-// and the error is nil. The question must not be empty.
+// returns the full text. When the budget is spent, the reply is
+// llm.ExhaustedLineFor(s.Lang) and the error is nil. The question must not be empty.
 func (s *Session) Ask(ctx context.Context, question string, onDelta func(string) error) (string, error) {
 	question = strings.TrimSpace(question)
 	if question == "" {
@@ -198,8 +221,8 @@ func (s *Session) Exhausted() bool {
 }
 
 // generate streams one reply through the budget. exhausted is true when the budget
-// refused the call. The text is then llm.ExhaustedLine, which the budget has
-// already sent to onDelta, and the error is nil.
+// refused the call. The text is then llm.ExhaustedLineFor(s.Lang), which the
+// budget has already sent to onDelta, and the error is nil.
 func (s *Session) generate(ctx context.Context, req llm.ChatRequest, onDelta func(string) error) (text string, exhausted bool, err error) {
 	var sb strings.Builder
 	_, err = s.budget.Stream(ctx, req, func(part string) error {
@@ -208,7 +231,7 @@ func (s *Session) generate(ctx context.Context, req llm.ChatRequest, onDelta fun
 	})
 	switch {
 	case errors.Is(err, llm.ErrBudgetExhausted):
-		return llm.ExhaustedLine, true, nil
+		return llm.ExhaustedLineFor(s.Lang), true, nil
 	case err != nil:
 		return "", false, err
 	}
@@ -227,17 +250,37 @@ func (s *Session) request(messages []llm.Message, purpose string, turn int) llm.
 		PodName:   name,
 		Evidence:  s.Evidence,
 		MaxTokens: maxReplyTokens,
-		FixtureID: name,
+		FixtureID: FixtureID(name, s.Lang),
 		TurnIndex: turn,
 		Purpose:   purpose,
 		DeathTime: s.deathTime,
+		Lang:      s.Lang,
 	}
 }
 
+// FixtureID returns the replay key of a séance with the Pod podName in lang:
+// the pod name for Chinese, and the pod name with "-en" for English. An empty
+// pod name stays empty, so replay is not attempted.
+func FixtureID(podName, lang string) string {
+	if podName == "" || llm.NormalizeLang(lang) != llm.LangEN {
+		return podName
+	}
+	return podName + englishFixtureSuffix
+}
+
+// openingRequest returns the user message that asks for the opening in the
+// séance language.
+func (s *Session) openingRequest() string {
+	if s.Lang == llm.LangEN {
+		return openingRequestEN
+	}
+	return openingRequest
+}
+
 // cacheKey returns the opening cache key: the Pod UID, the highest container
-// RestartCount, and the model.
+// RestartCount, the model and the séance language.
 func (s *Session) cacheKey() llm.OpeningKey {
-	k := llm.OpeningKey{Model: s.Model}
+	k := llm.OpeningKey{Model: s.Model, Lang: s.Lang}
 	if s.Autopsy == nil {
 		return k
 	}

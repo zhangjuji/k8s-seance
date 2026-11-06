@@ -24,8 +24,25 @@ const EnvMaxCalls = "SEANCE_BUDGET_MAX_CALLS"
 // HistoryRounds is how many user/assistant rounds TrimHistory keeps.
 const HistoryRounds = 4
 
-// ExhaustedLine is the ghost's line once the call budget is spent.
+// ExhaustedLine is the ghost's line once the call budget is spent, in Chinese.
 const ExhaustedLine = "仪式之力已耗尽，亡灵沉入黑暗……（本次降灵会的 LLM 调用额度已用完，你仍可以生成复盘。）"
+
+// ExhaustedLineEN is ExhaustedLine for an English séance.
+const ExhaustedLineEN = "The ritual's power is spent, and the spirit sinks back into the dark... (This séance has used all of its LLM calls. You can still generate the postmortem.)"
+
+// ExhaustedLineFor returns the exhausted line for a séance language. Anything
+// other than LangEN gets the Chinese line.
+func ExhaustedLineFor(lang string) string {
+	if langOrDefault(lang) == LangEN {
+		return ExhaustedLineEN
+	}
+	return ExhaustedLine
+}
+
+// IsExhaustedLine reports whether s is the exhausted line in any language.
+func IsExhaustedLine(s string) bool {
+	return s == ExhaustedLine || s == ExhaustedLineEN
+}
 
 // ErrBudgetExhausted is returned by Budget.Stream once MaxCalls calls have been used.
 var ErrBudgetExhausted = errors.New("llm: budget exhausted")
@@ -99,13 +116,14 @@ func NewBudget(p Provider, l Limits) *Budget {
 	return &Budget{inner: p, limits: l}
 }
 
-// Stream implements Provider. When the budget is spent it emits ExhaustedLine as a
-// single fragment and returns ErrBudgetExhausted without calling the inner provider.
+// Stream implements Provider. When the budget is spent it emits
+// ExhaustedLineFor(req.Lang) as a single fragment and returns
+// ErrBudgetExhausted without calling the inner provider.
 // Otherwise it trims the request to the input limit, clamps MaxTokens to the output
 // limit for the call, counts the call and delegates. If onDelta fails, that error is returned.
 func (b *Budget) Stream(ctx context.Context, req ChatRequest, onDelta func(string) error) (Usage, error) {
 	if b.Exhausted() {
-		return b.exhaustedReply(onDelta)
+		return b.exhaustedReply(req.Lang, onDelta)
 	}
 	prepared, err := b.prepare(req)
 	if err != nil {
@@ -113,7 +131,7 @@ func (b *Budget) Stream(ctx context.Context, req ChatRequest, onDelta func(strin
 	}
 	if !b.claim() {
 		// Another call used the last slot while this one was preparing.
-		return b.exhaustedReply(onDelta)
+		return b.exhaustedReply(req.Lang, onDelta)
 	}
 
 	usage, err := b.inner.Stream(ctx, prepared, onDelta)
@@ -125,9 +143,9 @@ func (b *Budget) Stream(ctx context.Context, req ChatRequest, onDelta func(strin
 	return usage, err
 }
 
-func (b *Budget) exhaustedReply(onDelta func(string) error) (Usage, error) {
+func (b *Budget) exhaustedReply(lang string, onDelta func(string) error) (Usage, error) {
 	if onDelta != nil {
-		if err := onDelta(ExhaustedLine); err != nil {
+		if err := onDelta(ExhaustedLineFor(lang)); err != nil {
 			return Usage{}, err
 		}
 	}
@@ -240,11 +258,12 @@ func droppableIndex(msgs []Message) int {
 }
 
 // OpeningKey identifies a cached opening line. Restarting a Pod changes RestartCount,
-// so a new life gets a new opening.
+// so a new life gets a new opening. Lang keeps the Chinese and English openings apart.
 type OpeningKey struct {
 	PodUID       string
 	RestartCount int32
 	Model        string
+	Lang         string
 }
 
 // OpeningCache stores opening lines by key. A cached opening is replayed by the caller

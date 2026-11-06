@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"net/http"
 	"regexp"
 	"strings"
 	"sync"
@@ -100,8 +101,11 @@ func newSeanceID() (string, error) {
 // seance is one live séance: a spirit.Session with the turns recorded so far and
 // the stream subscribers that get them.
 type seance struct {
-	id       string
-	source   string
+	id     string
+	source string
+	// lang is the séance language, fixed at creation. Turn fragments and the
+	// spirit's messages use it. The page around them uses the request language.
+	lang     string
 	ns, pod  string
 	cause    autopsy.CauseOfDeath
 	died     string
@@ -216,16 +220,19 @@ type deltaPayload struct {
 
 // newSeance wraps a new session for the Pod a. The session uses the server's
 // provider, limits and opening cache, so each séance has its own call budget.
-func (s *Server) newSeance(id, source string, a *autopsy.PodAutopsy, cls autopsy.Classification, ev []autopsy.Evidence) *seance {
+// lang is the séance language.
+func (s *Server) newSeance(id, source, lang string, a *autopsy.PodAutopsy, cls autopsy.Classification, ev []autopsy.Evidence) *seance {
+	lang = uiLang(lang)
 	se := &seance{
 		id:       id,
 		source:   source,
+		lang:     lang,
 		ns:       a.Namespace,
 		pod:      a.Name,
 		cause:    cls.Cause,
 		evidence: ev,
 		evIDs:    make(map[string]bool, len(ev)),
-		tmpl:     s.seancePages,
+		tmpl:     s.set(lang).seance,
 		logf:     s.opts.Logger.Printf,
 		subs:     make(map[*subscriber]struct{}),
 	}
@@ -240,7 +247,7 @@ func (s *Server) newSeance(id, source string, a *autopsy.PodAutopsy, cls autopsy
 	if s.opts.Graveyard != nil {
 		se.bury = func(res postmortem.Result) string { return s.buryTombstone(a, cls, res) }
 	}
-	se.sess = spirit.NewSession(id, a, cls, ev, s.opts.Provider, s.opts.Limits, s.cache, s.opts.Model)
+	se.sess = spirit.NewSessionIn(lang, id, a, cls, ev, s.opts.Provider, s.opts.Limits, s.cache, s.opts.Model)
 	return se
 }
 
@@ -326,7 +333,7 @@ func (se *seance) runOpening(run *openingRun) {
 		se.openRun = nil
 		se.mu.Unlock()
 		run.err = err
-		se.broadcast(sseEvent{name: eventError, data: mustJSON(map[string]string{"message": "亡灵没有应答，请稍后再试。"})})
+		se.broadcast(sseEvent{name: eventError, data: mustJSON(map[string]string{"message": tr(se.lang, "no_answer")})})
 		close(run.done)
 		return
 	}
@@ -341,7 +348,8 @@ type askResult struct {
 }
 
 // ask records one question and its reply. Calls are serialized per séance.
-// When the budget is spent, the reply is llm.ExhaustedLine and exhausted is true.
+// When the budget is spent, the reply is llm.ExhaustedLineFor(se.lang) and
+// exhausted is true.
 // The opening must exist before ask is called.
 func (se *seance) ask(ctx context.Context, question string) (askResult, error) {
 	se.askMu.Lock()
@@ -359,10 +367,11 @@ func (se *seance) ask(ctx context.Context, question string) (askResult, error) {
 		return askResult{}, err
 	}
 	used, left := se.sess.BudgetUsed(), se.sess.BudgetRemaining()
-	res := askResult{exhausted: text == llm.ExhaustedLine}
+	line := llm.ExhaustedLineFor(se.lang)
+	res := askResult{exhausted: text == line}
 	res.user = se.addTurn(roleUser, strings.TrimSpace(question), used, left)
 	if res.exhausted {
-		se.broadcast(sseEvent{name: eventExhausted, data: mustJSON(map[string]string{"message": llm.ExhaustedLine})})
+		se.broadcast(sseEvent{name: eventExhausted, data: mustJSON(map[string]string{"message": line})})
 	}
 	res.reply = se.addTurn(roleSpirit, text, used, left)
 	return res, nil
@@ -450,20 +459,21 @@ type turnView struct {
 	Left   int
 }
 
-// renderTurn builds the HTML fragment of one turn. The text is escaped first, and
-// then each [E#] that names a known evidence item becomes a link to its card.
+// renderTurn builds the HTML fragment of one turn in the séance language. The
+// text is escaped first, and then each [E#] that names a known evidence item
+// becomes a link to its card.
 func (se *seance) renderTurn(index int, role, content string, used, left int) string {
 	v := turnView{
 		Index:  index,
 		Role:   role,
-		Who:    "你",
+		Who:    tr(se.lang, "who_user"),
 		Body:   se.linkEvidence(content),
 		Advice: role == roleSpirit && isAdvice(content),
 		Used:   used,
 		Left:   left,
 	}
 	if role == roleSpirit {
-		v.Who = "亡灵"
+		v.Who = tr(se.lang, "who_spirit")
 	}
 	var buf bytes.Buffer
 	if err := se.tmpl.ExecuteTemplate(&buf, "turn", v); err != nil {
@@ -501,7 +511,16 @@ func isAdvice(text string) bool {
 
 // seancePage is the data of templates/seance.html.
 type seancePage struct {
-	Title         string
+	UI    chrome
+	Title string
+	// Lang is the séance language. LangNotice is set when it differs from the
+	// interface language.
+	Lang       string
+	LangNotice string
+	// SpiritWho labels the typing indicator, like the spirit turns.
+	SpiritWho string
+	// Quick are the one-click questions, in the séance language.
+	Quick         []quickQuestion
 	ID            string
 	Pod           string
 	BadgeClass    string
@@ -518,16 +537,37 @@ type seancePage struct {
 	PostmortemURL string
 }
 
-// pageData builds the data for the séance page. It includes the turns recorded so
-// far, so the page works without the stream.
-func (se *seance) pageData() seancePage {
+// quickQuestion is one one-click question. Vals is the hx-vals JSON.
+type quickQuestion struct {
+	Text string
+	Vals string
+}
+
+// quickQuestions returns the one-click questions in lang.
+func quickQuestions(lang string) []quickQuestion {
+	keys := []string{"q_how_died", "q_fix"}
+	out := make([]quickQuestion, 0, len(keys))
+	for _, k := range keys {
+		text := tr(lang, k)
+		out = append(out, quickQuestion{Text: text, Vals: string(mustJSON(map[string]string{"text": text}))})
+	}
+	return out
+}
+
+// pageData builds the data for the séance page in the interface language ui.
+// It includes the turns recorded so far, so the page works without the stream.
+func (se *seance) pageData(r *http.Request, ui string) seancePage {
 	used, left := se.sess.BudgetUsed(), se.sess.BudgetRemaining()
 	turns := se.turnsSnapshot()
 	html := make([]template.HTML, 0, len(turns))
 	for _, t := range turns {
 		html = append(html, template.HTML(t.HTML))
 	}
-	return seancePage{
+	p := seancePage{
+		UI:            chromeFor(r, ui),
+		Lang:          se.lang,
+		SpiritWho:     tr(se.lang, "who_spirit"),
+		Quick:         quickQuestions(se.lang),
 		Title:         se.pod,
 		ID:            se.id,
 		Pod:           se.pod,
@@ -544,6 +584,10 @@ func (se *seance) pageData() seancePage {
 		Evidence:      se.evidence,
 		PostmortemURL: seancePostmortemURL(se.id),
 	}
+	if se.lang != ui {
+		p.LangNotice = trf(ui, "lang_mismatch", tr(ui, "lang_name_"+se.lang))
+	}
+	return p
 }
 
 // mustJSON encodes v as one line of JSON, without HTML escaping, so that html

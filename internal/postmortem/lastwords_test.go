@@ -165,6 +165,10 @@ func TestLastWordsFromRecordedOpenings(t *testing.T) {
 		"restless-spirit-84fc8b7c4c-52nl8": "所以不是我起不来，是我每次睁眼，都发现那张配置文件不在。",
 		"lost-soul-5ff5cb8464-hjtms":       "我从未呼吸过。",
 		"memory-glutton-7cc6df9966-bf87c":  "冥界没有留下记录的事，我不会替它编。",
+		// English séances (task 10.4): fixture ID <pod>-en.
+		"restless-spirit-84fc8b7c4c-52nl8-en": "Exit code 1.",
+		"lost-soul-5ff5cb8464-hjtms-en":       "Not one restart.",
+		"memory-glutton-7cc6df9966-bf87c-en":  "They say my memory grew heavy.",
 	}
 	entries, err := fs.ReadDir(fixtures.ReplayFS(), ".")
 	if err != nil {
@@ -193,7 +197,10 @@ func TestLastWordsFromRecordedOpenings(t *testing.T) {
 		}
 		seen[rec.FixtureID] = true
 		opening := rec.Turns[0].Reply
-		got := lastWords(autopsy.CauseOfDeath(rec.Turns[0].Cause), rec.FixtureID, []spirit.Turn{{Role: roleSpirit, Content: opening}})
+		// The generator passes the pod name, which is the fixture ID without the
+		// "-en" suffix of an English recording.
+		pod := strings.TrimSuffix(rec.FixtureID, "-en")
+		got := lastWords(autopsy.CauseOfDeath(rec.Turns[0].Cause), pod, []spirit.Turn{{Role: roleSpirit, Content: opening}})
 		if got != w {
 			t.Errorf("%s: Last words = %q, want %q", rec.FixtureID, got, w)
 		}

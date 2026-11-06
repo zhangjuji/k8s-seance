@@ -1,6 +1,6 @@
 {{define "content"}}<section id="page" class="graveyard">
-  <h1>墓地</h1>
-  <p class="graveyard-intro">每个生成过复盘的亡灵都在这里立了碑，最近死去的排在最前。</p>
+  <h1>{{T "gy_title"}}</h1>
+  <p class="graveyard-intro">{{T "gy_intro"}}</p>
 
   {{if .Notice}}
   <div class="notice" role="alert"><p>{{.Notice}}</p></div>
@@ -13,13 +13,13 @@
         <span class="tomb-name">{{.Pod}}</span>
         <span class="tomb-ns">{{.Namespace}}</span>
         <span class="badge {{.BadgeClass}}">{{.Cause}}</span>
-        <span class="tomb-dates"><span>生：{{.Born}}</span><span>卒：{{.Died}}</span></span>
+        <span class="tomb-dates"><span>{{Tf "born" .Born}}</span><span>{{Tf "died" .Died}}</span></span>
         <span class="tomb-epitaph">“{{.Epitaph}}”</span>
       </a>
     </li>
     {{end}}
   </ul>
   {{else}}
-  <p>墓地还是空的。召唤一个亡灵并生成复盘，它就会在这里立碑。</p>
+  <p>{{T "gy_empty"}}</p>
   {{end}}
 </section>{{end}}

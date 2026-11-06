@@ -15,9 +15,6 @@ import (
 	"github.com/zhangjuji/k8s-seance/internal/spirit"
 )
 
-// errGraveyardOff is reported when the server runs without a graveyard file.
-var errGraveyardOff = errors.New("墓地未开启（-graveyard 为空）")
-
 // registerGraveyardRoutes adds the graveyard routes to mux (Requirement 9).
 func (s *Server) registerGraveyardRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/graveyard", s.handleGraveyardAPI)
@@ -74,13 +71,13 @@ type graveyardResponse struct {
 // handleGraveyardAPI returns every tombstone as JSON, the most recent death first.
 func (s *Server) handleGraveyardAPI(w http.ResponseWriter, r *http.Request) {
 	if s.opts.Graveyard == nil {
-		writeJSON(w, http.StatusNotFound, apiError{Error: errGraveyardOff.Error()})
+		writeJSON(w, http.StatusNotFound, apiError{Error: tr(s.requestLang(r), "gy_off")})
 		return
 	}
 	all, err := s.opts.Graveyard.List()
 	if err != nil {
 		s.opts.Logger.Printf("list graveyard: %v", err)
-		writeJSON(w, http.StatusInternalServerError, apiError{Error: "读取墓地失败"})
+		writeJSON(w, http.StatusInternalServerError, apiError{Error: tr(s.requestLang(r), "gy_read_error")})
 		return
 	}
 	items := make([]tombstoneItem, 0, len(all))
@@ -103,6 +100,7 @@ func (s *Server) handleGraveyardAPI(w http.ResponseWriter, r *http.Request) {
 
 // graveyardPage is the data of templates/graveyard.html.
 type graveyardPage struct {
+	UI     chrome
 	Title  string
 	Stones []stoneView
 	Notice string
@@ -138,22 +136,24 @@ func stoneOf(t graveyard.Tombstone) stoneView {
 // handleGraveyardPage renders the tombstone grid. A missing or unreadable
 // graveyard is shown as a notice on a 200 page.
 func (s *Server) handleGraveyardPage(w http.ResponseWriter, r *http.Request) {
-	page := graveyardPage{Title: "墓地"}
+	lang := s.pageLang(w, r)
+	page := graveyardPage{UI: chromeFor(r, lang), Title: tr(lang, "gy_title")}
 	if s.opts.Graveyard == nil {
-		page.Notice = errGraveyardOff.Error()
+		page.Notice = tr(lang, "gy_off")
 	} else if all, err := s.opts.Graveyard.List(); err != nil {
 		s.opts.Logger.Printf("list graveyard: %v", err)
-		page.Notice = "读取墓地失败，请检查墓地文件。"
+		page.Notice = tr(lang, "gy_read_failed")
 	} else {
 		for _, t := range all {
 			page.Stones = append(page.Stones, stoneOf(t))
 		}
 	}
-	s.render(w, s.graveyardPages, page)
+	s.render(w, s.set(lang).graveyard, page)
 }
 
 // tombstonePage is the data of templates/tombstone.html.
 type tombstonePage struct {
+	UI    chrome
 	Title string
 	Stone stoneView
 	PM    postmortemView
@@ -165,8 +165,10 @@ func (s *Server) handleTombstonePage(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	s.render(w, s.tombPages, tombstonePage{
-		Title: t.PodName + " 之墓",
+	lang := s.pageLang(w, r)
+	s.render(w, s.set(lang).tomb, tombstonePage{
+		UI:    chromeFor(r, lang),
+		Title: trf(lang, "tomb_title", t.PodName),
 		Stone: stoneOf(t),
 		PM:    postmortemView{Markdown: t.PostmortemMD, DownloadURL: tombstoneDownloadURL(t.ID)},
 	})
@@ -189,7 +191,7 @@ func (s *Server) handleTombstoneDownload(w http.ResponseWriter, r *http.Request)
 // response itself when there is none.
 func (s *Server) tombstoneFor(w http.ResponseWriter, r *http.Request) (graveyard.Tombstone, bool) {
 	if s.opts.Graveyard == nil {
-		s.fail(w, r, http.StatusNotFound, errGraveyardOff.Error())
+		s.fail(w, r, http.StatusNotFound, tr(s.requestLang(r), "gy_off"))
 		return graveyard.Tombstone{}, false
 	}
 	id := r.PathValue("id")
@@ -204,7 +206,7 @@ func (s *Server) tombstoneFor(w http.ResponseWriter, r *http.Request) (graveyard
 		return graveyard.Tombstone{}, false
 	case err != nil:
 		s.opts.Logger.Printf("read tombstone %s: %v", id, err)
-		s.fail(w, r, http.StatusInternalServerError, "读取墓地失败")
+		s.fail(w, r, http.StatusInternalServerError, tr(s.requestLang(r), "gy_read_error"))
 		return graveyard.Tombstone{}, false
 	}
 	return t, true

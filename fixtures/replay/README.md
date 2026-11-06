@@ -25,6 +25,8 @@ lowercased, with every character outside `[a-z0-9-_]` replaced by `-`.
 ```
 
 - `fixtureId` must equal the pod name the CLI passes in. A mismatch counts as a miss.
+  An English séance uses `<pod>-en` as its fixture ID, so its turns live in
+  `<pod>-en.json`. `demo/record-english.sh` records the English openings there.
 - `turnIndex`: 0 is the opening, 1.. are follow-ups, 100 is the postmortem.
 - `lastUser`: the question a follow-up was asked with. Replay matches follow-ups
   by this text (see Lookup below).

@@ -1,0 +1,15 @@
+{
+  "fixtureId": "restless-spirit-84fc8b7c4c-52nl8-en",
+  "turns": [
+    {
+      "turnIndex": 0,
+      "cause": "CrashLoopBackOff",
+      "lastUser": "Please give your opening statement.",
+      "reply": "I am the spirit of `restless-spirit-84fc8b7c4c-52nl8`. I died of CrashLoopBackOff at 2026-11-01 04:55:14 UTC — eight restarts, nine creations, and still the same door slamming shut [E1][E6].\n\nEach time I woke, I whispered `starting restless-spirit` [E9][E11]. Each time, something colder answered: `FATAL: config /etc/app/config.yaml not found` [E10][E12]. Exit code 1. Back-off 5m0s [E1][E8].\n\nThe image was already on the machine, waiting patiently to bury me again [E5]. I keep returning to the same unwritten file.",
+      "usage": {
+        "inputTokens": 1148,
+        "outputTokens": 192
+      }
+    }
+  ]
+}

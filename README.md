@@ -13,7 +13,7 @@ Status: in progress (Kiroween 2026, Frankenstein track).
 - **Postmortem.** Markdown with a copy button and a `.md` download. The timeline, evidence and impact sections come from the collected data. The LLM writes only the summary, root cause, remediation and action items. If the LLM is unavailable or the call budget is spent, a rule-based template fills those sections instead.
 - **Graveyard.** Each generated postmortem also becomes a tombstone in a local JSON file: Pod name, namespace, birth and death times, cause, an epitaph (the postmortem's last words) and the postmortem itself. Generating the postmortem again for the same Pod replaces its tombstone. The **墓地** (graveyard) page at `/graveyard` shows the tombstones as a grid, most recent death first. Click one to read its postmortem or download it as `.md`. The JSON list is at `/api/graveyard`. The file defaults to `~/.k8s-seance/graveyard.json` (directory mode 0700, file mode 0600, because postmortems contain log lines). Use `-graveyard <path>` to move it, or `-graveyard ""` to turn the graveyard off. Fixture mode writes tombstones too.
 
-The web UI text is in Chinese. The recorded fixture spirits speak Chinese, and their postmortems are in English.
+The web UI is in Chinese or English (see [English path](#english-path)). The recorded fixture spirits speak Chinese in a Chinese séance and English in an English séance. Postmortems are always in English.
 
 ## Quick start
 
@@ -53,6 +53,20 @@ The recorded questions, read from each file's `lastUser` field:
 | `lost-soul-5ff5cb8464-hjtms` | 怎么修复？ (How do I fix it?) | opening, postmortem |
 
 The opening is requested with the internal message `请做开场陈述。` ("Please give your opening statement"). It is not typed by the user.
+
+English séances read `fixtures/replay/<pod>-en.json`. Each of the three spirits has a recorded English opening there, requested with `Please give your opening statement.`, and nothing else. English follow-ups get the English mock reply. The postmortem reuses the turn-100 recording in `<pod>.json`, which is already in English.
+
+## English path
+
+- **Interface language.** The first match wins: `?lang=zh` or `?lang=en` (the switch link in the top bar, which also sets the cookie `seance_lang`), the `seance_lang` cookie, the `-lang zh|en` flag, then the browser's `Accept-Language`. When that header lists `en` before `zh`, or lists neither, the UI is English. Without the header, the UI is Chinese.
+- **Séance language.** A séance takes the interface language at the moment you click **Summon** (the form sends `lang`, and the JSON API accepts `"lang":"zh"|"en"`). It does not change afterwards. An English séance sends an English opening request, adds an English language rule to the system prompt, uses English quick questions, an English mock and an English exhausted line, and replays `<pod>-en.json`. Follow-ups are still answered in the language of the question. The Chinese system prompt is unchanged.
+- If the interface language differs from the séance language, the séance page says that switching the language only changes the interface.
+
+```sh
+go run ./cmd/seance --fixtures --replay -lang en
+```
+
+To record the English openings again, delete `fixtures/replay/<pod>-en.json` and run `./demo/record-english.sh` with `SEANCE_LLM_BASE_URL`, `SEANCE_LLM_API_KEY` and `SEANCE_LLM_MODEL` set. It starts a temporary server with `--fixtures` and `SEANCE_RECORD=1`, makes at most one call per spirit (only openings that are not recorded yet), stops the server and reports how often the key occurs in the files it wrote, which must be 0.
 
 The same modes work on the command line. This prints the autopsy of each fixture spirit, with its evidence list and opening, to stdout:
 

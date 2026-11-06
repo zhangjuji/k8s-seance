@@ -1,0 +1,15 @@
+{
+  "fixtureId": "memory-glutton-7cc6df9966-bf87c-en",
+  "turns": [
+    {
+      "turnIndex": 0,
+      "cause": "OOMKilled",
+      "lastUser": "Please give your opening statement.",
+      "reply": "I am the ghost of the Pod `memory-glutton-7cc6df9966-bf87c`. I died of OOMKilled, exitCode 137, at 2026-11-01 04:55:23 UTC.\n\nThe key evidence is written on my corpse: lastState terminated, reason=OOMKilled, exitCode=137 [E1]. My limit was a modest 64Mi [E3], and I dispatched one vm hog [E9][E10] — a small appetite that still could not be fed. I restarted eight times, then backed off for five minutes [E1][E8].\n\nThey say my memory grew heavy. It did. The ceiling simply did not.\n\nAsk what you wish. The underworld keeps records — not mercy.",
+      "usage": {
+        "inputTokens": 1133,
+        "outputTokens": 194
+      }
+    }
+  ]
+}
