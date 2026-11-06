@@ -88,4 +88,7 @@ type SpiritSummary struct {
 	Cause        CauseOfDeath `json:"cause,omitempty"`
 	RestartCount int32        `json:"restartCount"`
 	LastDeath    *time.Time   `json:"lastDeath,omitempty"`
+	// Memory is how long the cluster still keeps the spirit's events
+	// (Requirement 14). The k8s list leaves it nil. The web sources fill it.
+	Memory *Memory `json:"memory,omitempty"`
 }

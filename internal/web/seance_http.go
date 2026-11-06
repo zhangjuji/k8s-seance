@@ -80,6 +80,11 @@ type seanceDetail struct {
 	BudgetRemaining int              `json:"budgetRemaining"`
 	Exhausted       bool             `json:"exhausted"`
 	Evidence        []evidenceItem   `json:"evidence"`
+	// Memory is the forgetting countdown at the time of the request
+	// (Requirement 14). RestartsSoon lists the containers whose --previous log
+	// the next restart overwrites, [] when none.
+	Memory       autopsy.Memory `json:"memory"`
+	RestartsSoon []string       `json:"restartsSoon"`
 }
 
 type transcriptItem struct {
@@ -197,6 +202,11 @@ func (s *Server) handleGetSeance(w http.ResponseWriter, r *http.Request) {
 		evidence = append(evidence, evidenceItem{ID: e.ID, Kind: e.Kind, Text: e.Text})
 	}
 	used, left := se.sess.BudgetUsed(), se.sess.BudgetRemaining()
+	a := se.sess.Autopsy
+	soon := autopsy.RestartsSoon(a)
+	if soon == nil {
+		soon = []string{}
+	}
 	writeJSON(w, http.StatusOK, seanceDetail{
 		ID:              se.id,
 		Pod:             se.pod,
@@ -208,6 +218,8 @@ func (s *Server) handleGetSeance(w http.ResponseWriter, r *http.Request) {
 		BudgetRemaining: left,
 		Exhausted:       left == 0,
 		Evidence:        evidence,
+		Memory:          autopsy.Remember(a, se.eventTTL, memoryAsOf(a, se.now())),
+		RestartsSoon:    soon,
 	})
 }
 

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"sort"
@@ -223,7 +224,7 @@ type bell struct {
 	mass  massGrave
 	prev  []autopsy.SpiritSummary
 	ready bool   // prev holds the baseline
-	last  string // table body last sent
+	last  string // rowsSignature of the table body last sent
 	sick  bool   // the last list failed or the watch broke
 }
 
@@ -271,8 +272,9 @@ func (b *bell) update(ctx context.Context) (string, any) {
 		}
 	}
 	quiet := len(ev.Arrived) == 0 && len(ev.Worse) == 0 && len(ev.Mass) == 0
-	unchanged := b.ready && html == b.last && !b.sick
-	b.prev, b.ready, b.last, b.sick = spirits, true, html, false
+	sig := rowsSignature(b.lang, spirits)
+	unchanged := b.ready && sig == b.last && !b.sick
+	b.prev, b.ready, b.last, b.sick = spirits, true, sig, false
 	if quiet && unchanged {
 		return "", nil
 	}
@@ -289,11 +291,27 @@ type rowsView struct {
 // renderRows renders the table body for spirits in lang.
 func (s *Server) renderRows(lang, source string, spirits []autopsy.SpiritSummary) (string, error) {
 	var buf bytes.Buffer
-	view := rowsView{UI: chrome{Lang: lang}, SourceName: source, Rows: rowsOf(spirits)}
+	view := rowsView{UI: chrome{Lang: lang}, SourceName: source, Rows: rowsOf(lang, spirits)}
 	if err := s.set(lang).list.ExecuteTemplate(&buf, "spirit_rows", view); err != nil {
 		return "", err
 	}
 	return buf.String(), nil
+}
+
+// rowsSignature describes the table body with the moment each key memory fades
+// instead of the seconds left, which change on every list of a live cluster.
+// The browser counts those down by itself, so a list that differs only in them
+// is not sent again, while a refreshed or new Warning event is.
+func rowsSignature(lang string, spirits []autopsy.SpiritSummary) string {
+	rows := rowsOf(lang, spirits)
+	fades := make([]int64, len(spirits))
+	for i := range rows {
+		rows[i].Memory = countdown{}
+		if m := spirits[i].Memory; m != nil && m.Key != nil {
+			fades[i] = m.Key.FadesAt.Unix()
+		}
+	}
+	return fmt.Sprintf("%+v %v", rows, fades)
 }
 
 // streamURL is the live stream address for a list page.

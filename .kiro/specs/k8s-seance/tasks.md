@@ -101,10 +101,10 @@
   - [x] 13.3 降灵会页「念出复活咒语」面板、复制按钮、补丁下载；`demo/crashloop.yaml` 改为真的检查配置文件，挂上后能复活
     - _Requirements: 13.1, 13.6_
 
-- [ ] 14. 遗忘倒计时
-  - [ ] 14.1 `autopsy.Remember`：按事件 TTL 计算最先消散的 Warning 事件、全部事件消散时间；`RestartsSoon`；`-event-ttl`
+- [x] 14. 遗忘倒计时
+  - [x] 14.1 `autopsy.Remember`：按事件 TTL 计算最先消散的 Warning 事件、全部事件消散时间；`RestartsSoon`；`-event-ttl`
     - _Requirements: 14.1, 14.2_
-  - [ ] 14.2 列表「记忆」列、淡出与横幅、`static/memory.js` 浏览器倒计时；降灵会遗忘面板、证据卡片倒计时、留住记忆按钮
+  - [x] 14.2 列表「记忆」列、淡出与横幅、`static/memory.js` 浏览器倒计时；降灵会遗忘面板、证据卡片倒计时、留住记忆按钮
     - _Requirements: 14.3, 14.4, 14.5_
 
 - [ ] 15. 亡灵祭坛

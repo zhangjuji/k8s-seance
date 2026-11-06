@@ -3,7 +3,7 @@
 //
 // Usage:
 //
-//	seance [-addr localhost:6660] [-n namespace] [-kubeconfig path] [-tail 200] [-graveyard path] [-lang zh|en] [-fixtures] [-replay | -mock]
+//	seance [-addr localhost:6660] [-n namespace] [-kubeconfig path] [-tail 200] [-graveyard path] [-lang zh|en] [-event-ttl 1h] [-fixtures] [-replay | -mock]
 //	seance summon [-n namespace] [-kubeconfig path] [-pod name] [-tail 200] [-fixtures] [-replay | -mock]
 //
 // The command is read-only: it only lists and gets Pods, reads their logs and
@@ -22,6 +22,8 @@
 // The Web UI is in Chinese or English: ?lang=zh|en, then the seance_lang cookie,
 // then -lang, then the browser's Accept-Language. A séance summoned from the
 // English UI is held in English and replays fixtures/replay/<pod>-en.json.
+// The forgetting countdown assumes that kube-apiserver deletes an Event one
+// -event-ttl (default 1h, the apiserver default) after its last update.
 package main
 
 import (
@@ -83,8 +85,9 @@ func runServe(args []string) error {
 	useMock := fs.Bool("mock", false, "LLM replies from the built-in template, no API calls")
 	graveyardPath := fs.String("graveyard", defaultGraveyardPath(), "tombstone file for generated postmortems (empty: graveyard off)")
 	uiLang := fs.String("lang", "", "default UI language, zh or en (empty: from the browser's Accept-Language)")
+	eventTTL := fs.Duration("event-ttl", autopsy.DefaultEventTTL, "event TTL of the cluster's kube-apiserver (--event-ttl), for the forgetting countdown")
 	fs.Usage = func() {
-		fmt.Fprintf(fs.Output(), "Usage: seance [-addr localhost:6660] [-n namespace] [-kubeconfig path] [-tail 200] [-graveyard path] [-lang zh|en] [-fixtures] [-replay | -mock]\n       seance summon [flags]   print autopsies to stdout\n\n")
+		fmt.Fprintf(fs.Output(), "Usage: seance [-addr localhost:6660] [-n namespace] [-kubeconfig path] [-tail 200] [-graveyard path] [-lang zh|en] [-event-ttl 1h] [-fixtures] [-replay | -mock]\n       seance summon [flags]   print autopsies to stdout\n\n")
 		fs.PrintDefaults()
 	}
 	_ = fs.Parse(args) // ExitOnError: bad flags exit with status 2, -h with 0.
@@ -98,9 +101,13 @@ func runServe(args []string) error {
 		fmt.Fprintf(os.Stderr, "seance: -lang %q: use zh or en\n", *uiLang)
 		os.Exit(2)
 	}
+	if *eventTTL <= 0 {
+		fmt.Fprintf(os.Stderr, "seance: -event-ttl %v: must be positive\n", *eventTTL)
+		os.Exit(2)
+	}
 	logger := log.New(os.Stderr, "seance: ", 0)
 	provider := buildProvider(mode, os.Stderr)
-	cluster, clusterErr := openCluster(*useFixtures, *kubeconfig, *tail, logger)
+	cluster, clusterErr := openCluster(*useFixtures, *kubeconfig, *tail, *eventTTL, logger)
 	cfg, _ := llm.LoadConfig() // buildProvider already reported any config problem
 	grave := openGraveyard(*graveyardPath, logger)
 
@@ -115,6 +122,7 @@ func runServe(args []string) error {
 		Logger:           logger,
 		Graveyard:        grave,
 		Lang:             *uiLang,
+		EventTTL:         *eventTTL,
 	})
 	if err != nil {
 		return err
@@ -151,7 +159,7 @@ func openGraveyard(path string, logger *log.Logger) *graveyard.Store {
 
 // openCluster returns the cluster source, or nil with the reason it is unavailable.
 // It only reads the kubeconfig and builds a client. It makes no API request.
-func openCluster(fixturesOnly bool, kubeconfig string, tail int, logger *log.Logger) (web.Source, error) {
+func openCluster(fixturesOnly bool, kubeconfig string, tail int, eventTTL time.Duration, logger *log.Logger) (web.Source, error) {
 	if fixturesOnly {
 		return nil, errFixturesOnly
 	}
@@ -160,7 +168,7 @@ func openCluster(fixturesOnly bool, kubeconfig string, tail int, logger *log.Log
 		logger.Printf("warning: no cluster connection, the UI will show the reason: %v", err)
 		return nil, err
 	}
-	return web.ClusterSource{Client: cs, Tail: tail}, nil
+	return web.ClusterSource{Client: cs, Tail: tail, EventTTL: eventTTL}, nil
 }
 
 // serveHTTP listens on addr and serves handler until SIGINT or SIGTERM, then shuts down gracefully.

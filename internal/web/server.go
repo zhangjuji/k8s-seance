@@ -84,6 +84,10 @@ type Options struct {
 	// Lang fixes the default interface language (the -lang flag): "zh", "en" or
 	// "" (use Accept-Language). ?lang= and the seance_lang cookie still win.
 	Lang string
+	// EventTTL is the kube-apiserver event TTL for the forgetting countdown
+	// (the -event-ttl flag). Zero means autopsy.DefaultEventTTL. It is used by the
+	// séance page and by the default fixture source. The cluster source has its own.
+	EventTTL time.Duration
 }
 
 // pageSet holds the templates of every page for one interface language. Pages
@@ -143,8 +147,16 @@ func New(opts Options) (*Server, error) {
 	if len(opts.DefaultNamespace) > 63 || !namespacePattern.MatchString(opts.DefaultNamespace) {
 		return nil, fmt.Errorf("default namespace %q: %w", opts.DefaultNamespace, errInvalidNamespace)
 	}
+	if opts.EventTTL < 0 {
+		return nil, fmt.Errorf("event TTL %v: must be positive", opts.EventTTL)
+	}
+	if opts.EventTTL == 0 {
+		opts.EventTTL = autopsy.DefaultEventTTL
+	}
 	if opts.Fixtures == nil {
-		opts.Fixtures = NewFixtureSource()
+		fx := NewFixtureSource()
+		fx.EventTTL = opts.EventTTL
+		opts.Fixtures = fx
 	}
 	if opts.Logger == nil {
 		opts.Logger = log.New(os.Stderr, "seance: ", log.LstdFlags)
@@ -276,6 +288,8 @@ type listPage struct {
 	Rows      []spiritRow
 	// Notice is shown above the table when the list failed or the cluster is unavailable.
 	Notice string
+	// MemoryBanner is set when a spirit's key memory fades in less than 15 minutes.
+	MemoryBanner bool
 }
 
 // spiritRow is one table row, already formatted for display.
@@ -286,6 +300,12 @@ type spiritRow struct {
 	BadgeClass   string
 	RestartCount int32
 	LastDeath    string
+	// HasMemory is false when the spirit has no Warning event ("no event record").
+	// Memory is the countdown to its first fading Warning event, MemoryReason that
+	// event's reason.
+	HasMemory    bool
+	Memory       countdown
+	MemoryReason string
 }
 
 // handleSpiritsPage renders the list page. A cluster problem is shown as a notice on a 200 page.
@@ -317,7 +337,8 @@ func (s *Server) handleSpiritsPage(w http.ResponseWriter, r *http.Request) {
 		if lerr != nil {
 			page.Notice = trf(lang, "read_spirits_failed", lerr.Error())
 		}
-		page.Rows = rowsOf(spirits)
+		page.Rows = rowsOf(lang, spirits)
+		page.MemoryBanner = anyFading(page.Rows)
 	}
 
 	var buf bytes.Buffer
@@ -330,20 +351,36 @@ func (s *Server) handleSpiritsPage(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(buf.Bytes())
 }
 
-// rowsOf formats summaries for the table.
-func rowsOf(spirits []autopsy.SpiritSummary) []spiritRow {
+// rowsOf formats summaries for the table in lang.
+func rowsOf(lang string, spirits []autopsy.SpiritSummary) []spiritRow {
 	rows := make([]spiritRow, 0, len(spirits))
 	for _, sp := range spirits {
-		rows = append(rows, spiritRow{
+		row := spiritRow{
 			Namespace:    sp.Namespace,
 			Name:         sp.Name,
 			Cause:        string(sp.Cause),
 			BadgeClass:   badgeClass(sp.Cause),
 			RestartCount: sp.RestartCount,
 			LastDeath:    formatTime(sp.LastDeath),
-		})
+		}
+		if m := sp.Memory; m != nil && m.Key != nil {
+			row.HasMemory = true
+			row.Memory = newCountdown(lang, m.LeftSeconds)
+			row.MemoryReason = m.Key.Reason
+		}
+		rows = append(rows, row)
 	}
 	return rows
+}
+
+// anyFading reports whether a row's key memory fades in less than 15 minutes.
+func anyFading(rows []spiritRow) bool {
+	for _, r := range rows {
+		if r.HasMemory && memoryFading(r.Memory.Left) {
+			return true
+		}
+	}
+	return false
 }
 
 // badgeClass maps a cause to its CSS class, for example OOMKilled to badge-oomkilled.

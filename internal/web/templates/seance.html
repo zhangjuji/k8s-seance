@@ -7,6 +7,21 @@
   </header>
   {{with .LangNotice}}<p class="lang-notice" role="note">{{.}}</p>{{end}}
 
+  {{with .Memory}}<section id="memory-panel" class="memory-panel{{if .HasKey}} {{.Key.Class}}{{end}}" aria-label="{{T "memory_title"}}"{{if .HasKey}} data-memory-scope{{end}}>
+    <h2>{{T "memory_title"}}</h2>
+    {{if .HasKey}}
+    <p class="memory-key">{{T "memory_key"}} {{with .KeyID}}<a class="ev-link" href="#ev-{{.}}">[{{.}}]</a> {{end}}<code>{{.KeyReason}}</code> {{.KeyMessage}}</p>
+    <p>{{Tf "memory_key_at" .KeyAt}} · <span class="memory-count {{.Key.Class}}" data-memory-main data-memory-left="{{.Key.Left}}">{{.Key.Text}}</span></p>
+    {{else}}
+    <p class="memory-none">{{T "memory_none"}}</p>
+    {{end}}
+    {{if .AllAt}}<p>{{Tf "memory_all_at" .AllAt}} · <span class="memory-count {{.All.Class}}" data-memory-left="{{.All.Left}}">{{.All.Text}}</span></p>{{end}}
+    {{range .RestartsSoon}}<p class="memory-warn">{{Tf "memory_previous" .}}</p>
+    {{end}}<p class="memory-warn">{{T "memory_pod_gone"}}</p>
+    {{if .Fixture}}<p class="memory-note">{{Tf "memory_fixture_asof" .AsOf}}</p>{{end}}
+    <button type="button" class="memory-keep" hx-post="{{$.PostmortemURL}}" hx-target="#postmortem" hx-swap="innerHTML">{{T "memory_keep"}}</button>
+  </section>{{end}}
+
   <div class="seance-body">
     <div class="chat">
       <div id="log" class="log">{{range .Turns}}{{.}}{{end}}</div>
@@ -34,11 +49,12 @@
 
     <aside class="evidence">
       <h2>{{T "evidence"}}</h2>
-      {{range .Evidence}}<details id="ev-{{.ID}}"><summary>[{{.ID}}] {{.Kind}}</summary><pre>{{.Text}}</pre></details>
+      {{range .Evidence}}<details id="ev-{{.ID}}"><summary{{if .HasMemory}} data-memory-scope class="{{.Memory.Class}}"{{end}}>[{{.ID}}] {{.Kind}}{{if .HasMemory}} <span class="memory-count {{.Memory.Class}}" data-memory-main data-memory-left="{{.Memory.Left}}">{{.Memory.Text}}</span>{{end}}</summary><pre>{{.Text}}</pre></details>
       {{end}}
     </aside>
   </div>
 </section>
+{{template "memory_i18n" .}}
 <script src="/static/sse.js" defer></script>
 <script>
 (function () {

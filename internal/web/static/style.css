@@ -588,3 +588,44 @@ tbody tr.fresh { animation: row-flicker 1.2s ease-in-out 3; background: rgba(255
   font-size: 0.82rem;
 }
 .spell-copy { flex: none; }
+
+/* Forgetting countdown (task 14): rows fade below 15 minutes, flicker below 5,
+   and read "forgotten" at zero. memory.js keeps the classes in step. */
+.memory-count { color: var(--muted); white-space: nowrap; font-size: 0.9em; }
+.memory-none { color: var(--muted); font-style: italic; font-size: 0.9em; }
+.memory-count.memory-fading { color: var(--flame-soft); }
+.memory-count.memory-gone { color: var(--muted); text-decoration: line-through; }
+tbody tr.memory-fading { opacity: 0.6; transition: opacity 1s ease; }
+tbody tr.memory-gone { opacity: 0.4; }
+tr.memory-vanishing .memory-count,
+.memory-count.memory-vanishing { animation: memory-flicker 1.6s ease-in-out infinite; }
+.memory-banner { margin-top: 0.75rem; }
+.memory-note { color: var(--muted); font-size: 0.9em; margin: 0.4rem 0; }
+.memory-panel {
+  position: relative;
+  z-index: 1;
+  margin: 0.75rem 0 1rem;
+  padding: 0.6rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg-2);
+}
+.memory-panel h2 { margin: 0 0 0.4rem; font-size: 1rem; color: var(--flame-soft); }
+.memory-panel p { margin: 0.3rem 0; }
+.memory-panel.memory-fading { border-color: var(--banner-line); background: var(--banner-bg); }
+.memory-panel.memory-gone { opacity: 0.7; }
+.memory-warn { color: var(--banner-text); }
+.memory-keep { margin-top: 0.4rem; }
+.evidence summary.memory-fading { opacity: 0.75; }
+.evidence summary.memory-gone { opacity: 0.5; }
+
+@keyframes memory-flicker {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .memory-count.memory-vanishing,
+  tr.memory-vanishing .memory-count { animation: none; }
+  tbody tr.memory-fading { transition: none; }
+}

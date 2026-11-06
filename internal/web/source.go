@@ -33,6 +33,11 @@ type ClusterSource struct {
 	// Tail keeps at most this many trailing log lines per container. Zero keeps
 	// everything the collector returns (at most 200 lines).
 	Tail int
+	// EventTTL is the kube-apiserver event TTL used for the memory countdown.
+	// Zero means autopsy.DefaultEventTTL.
+	EventTTL time.Duration
+	// Now is the clock the countdown starts from. Nil means time.Now.
+	Now func() time.Time
 }
 
 // Name implements Source.
@@ -40,7 +45,8 @@ func (ClusterSource) Name() string { return "cluster" }
 
 // List implements Source. It makes one Pods list and one namespace-wide Events list,
 // whatever the number of spirits. Cause comes from autopsy.Classify on the list-only
-// autopsies, so no Get or log read is made here. Log tails are not read, and
+// autopsies, so no Get or log read is made here. Memory counts from now with
+// EventTTL (Requirement 14). Log tails are not read, and
 // Classify does not use them. A Pod does not appear in the list if it is gone from the
 // cluster by the time the list is read.
 func (c ClusterSource) List(ctx context.Context, namespace string) ([]autopsy.SpiritSummary, error) {
@@ -48,10 +54,17 @@ func (c ClusterSource) List(ctx context.Context, namespace string) ([]autopsy.Sp
 	if err != nil {
 		return nil, err
 	}
+	now := time.Now
+	if c.Now != nil {
+		now = c.Now
+	}
+	asOf := now()
 	out := make([]autopsy.SpiritSummary, 0, len(listings))
 	for _, l := range listings {
 		s := l.Summary
 		s.Cause = autopsy.Classify(l.Autopsy).Cause
+		m := autopsy.Remember(l.Autopsy, c.EventTTL, asOf)
+		s.Memory = &m
 		out = append(out, s)
 	}
 	return out, nil
@@ -86,8 +99,12 @@ func keepLastLines(lines []string, n int) []string {
 // touches a cluster. List ignores the requested namespace, because the fixtures
 // come from one demo namespace and the page says so. Autopsy also ignores the
 // namespace and finds the spirit by name.
+// The memory countdown counts from each fixture's collectedAt, the moment it
+// was recorded, so the recorded spirits are not all forgotten (Requirement 14.5).
 type FixtureSource struct {
 	load func() ([]*autopsy.PodAutopsy, error)
+	// EventTTL is the event TTL for the countdown. Zero means autopsy.DefaultEventTTL.
+	EventTTL time.Duration
 }
 
 // NewFixtureSource returns the source backed by the embedded fixtures.
@@ -108,7 +125,10 @@ func (f *FixtureSource) List(_ context.Context, _ string) ([]autopsy.SpiritSumma
 	}
 	out := make([]autopsy.SpiritSummary, 0, len(all))
 	for _, a := range all {
-		out = append(out, summarizeAutopsy(a))
+		s := summarizeAutopsy(a)
+		m := autopsy.Remember(a, f.EventTTL, memoryAsOf(a, time.Now()))
+		s.Memory = &m
+		out = append(out, s)
 	}
 	return out, nil
 }
@@ -157,4 +177,14 @@ func laterTime(cur, t *time.Time) *time.Time {
 		return &v
 	}
 	return cur
+}
+
+// memoryAsOf is the moment a countdown for a starts from: the recording time
+// for a fixture, so that sample mode does not show every spirit as forgotten,
+// and now for a live Pod.
+func memoryAsOf(a *autopsy.PodAutopsy, now time.Time) time.Time {
+	if a != nil && a.Source == "fixture" && !a.CollectedAt.IsZero() {
+		return a.CollectedAt
+	}
+	return now
 }

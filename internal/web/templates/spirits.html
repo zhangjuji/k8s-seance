@@ -3,6 +3,7 @@
 
   {{if .FixtureMode}}
   <div class="banner">{{Tf "fixture_banner" (len .Rows)}}</div>
+  <p class="memory-note">{{T "memory_fixture_note"}}</p>
   {{else if .Live}}
   {{/* Live mode: switching the namespace loads a whole page, so the old stream closes with it. */}}
   <form method="get" action="/spirits">
@@ -35,6 +36,8 @@
   </div>
   {{end}}
 
+  <div id="memory-banner" class="banner memory-banner" role="alert"{{if not .MemoryBanner}} hidden{{end}}>{{T "memory_banner"}}</div>
+
   {{if .Notice}}
   <div class="notice" id="list-notice" role="alert">
     <p>{{.Notice}}</p>
@@ -51,6 +54,7 @@
         <th>{{T "col_cause"}}</th>
         <th>{{T "col_restarts"}}</th>
         <th>{{T "col_last_death"}}</th>
+        <th>{{T "col_memory"}}</th>
         <th></th>
       </tr>
     </thead>
@@ -61,6 +65,7 @@
   <p id="no-spirits"{{if .Notice}} hidden{{end}}>{{T "no_spirits"}}</p>
   {{end}}{{end}}
 </section>
+{{template "memory_i18n" .}}
 {{if .Live}}
 <script src="/static/sse.js" defer></script>
 <script>
@@ -200,6 +205,8 @@
     if (empty) { empty.hidden = d.count !== 0; }
     var listNotice = document.getElementById('list-notice');
     if (listNotice) { listNotice.hidden = true; }
+    // The new rows carry fresh seconds left from the server. Count down from them.
+    if (window.seanceMemory) { window.seanceMemory.scan(); }
 
     var fresh = {};
     d.arrived.forEach(function (a) { notice(a, 'arrived'); fresh[a.name] = true; });
@@ -216,12 +223,13 @@
 {{end}}{{end}}
 
 {{define "spirit_rows"}}{{range .Rows}}
-      <tr data-pod="{{.Name}}">
+      <tr data-pod="{{.Name}}"{{if .HasMemory}} data-memory-scope class="{{.Memory.Class}}"{{end}}>
         <td>{{.Name}}</td>
         <td>{{.Namespace}}</td>
         <td><span class="badge {{.BadgeClass}}">{{.Cause}}</span></td>
         <td>{{.RestartCount}}</td>
         <td>{{.LastDeath}}</td>
+        <td class="memory-cell">{{if .HasMemory}}<span class="memory-count {{.Memory.Class}}" data-memory-main data-memory-banner data-memory-left="{{.Memory.Left}}" title="{{.MemoryReason}}">{{.Memory.Text}}</span>{{else}}<span class="memory-none">{{T "memory_none"}}</span>{{end}}</td>
         <td>
           <form method="post" action="/api/seances">
             <input type="hidden" name="ns" value="{{.Namespace}}">

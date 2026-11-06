@@ -20,3 +20,7 @@
 <main>{{template "content" .}}</main>
 </body>
 </html>{{end}}
+
+{{/* memory_i18n gives static/memory.js the countdown labels of the page language. */}}
+{{define "memory_i18n"}}<div id="memory-i18n" hidden data-left="{{Tf "memory_left" "{t}"}}" data-gone="{{T "memory_gone"}}" data-lt1="{{T "memory_lt1"}}" data-h="{{T "memory_h"}}" data-min="{{T "memory_min"}}"></div>
+<script src="/static/memory.js" defer></script>{{end}}

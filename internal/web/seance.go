@@ -112,6 +112,9 @@ type seance struct {
 	sess     *spirit.Session
 	evidence []autopsy.Evidence
 	evIDs    map[string]bool
+	// eventTTL and now drive the forgetting countdown of the page (Requirement 14).
+	eventTTL time.Duration
+	now      func() time.Time
 	tmpl     *template.Template
 	logf     func(format string, args ...any)
 	// bury stores a tombstone for a new postmortem and returns its ID, or "" when
@@ -268,6 +271,8 @@ func (s *Server) newSeance(id, source, lang string, a *autopsy.PodAutopsy, cls a
 		cause:    cls.Cause,
 		evidence: ev,
 		evIDs:    make(map[string]bool, len(ev)),
+		eventTTL: s.opts.EventTTL,
+		now:      s.now,
 		tmpl:     s.set(lang).seance,
 		logf:     s.opts.Logger.Printf,
 		subs:     make(map[*subscriber]struct{}),
@@ -560,20 +565,22 @@ type seancePage struct {
 	// SpiritWho labels the typing indicator, like the spirit turns.
 	SpiritWho string
 	// Quick are the one-click questions, in the séance language.
-	Quick         []quickQuestion
-	ID            string
-	Pod           string
-	BadgeClass    string
-	Cause         string
-	Died          string
-	StreamURL     string
-	MessagesURL   string
-	Used          int
-	Left          int
-	Total         int
-	Exhausted     bool
-	Turns         []template.HTML
-	Evidence      []autopsy.Evidence
+	Quick       []quickQuestion
+	ID          string
+	Pod         string
+	BadgeClass  string
+	Cause       string
+	Died        string
+	StreamURL   string
+	MessagesURL string
+	Used        int
+	Left        int
+	Total       int
+	Exhausted   bool
+	Turns       []template.HTML
+	Evidence    []evidenceCard
+	// Memory is the forgetting panel (Requirement 14).
+	Memory        memoryPanel
 	PostmortemURL string
 	// SpellURL is the resurrection spell panel (Requirement 13).
 	SpellURL string
@@ -605,6 +612,7 @@ func (se *seance) pageData(r *http.Request, ui string) seancePage {
 	for _, t := range turns {
 		html = append(html, template.HTML(t.HTML))
 	}
+	memory, cards := buildMemory(ui, se.sess.Autopsy, se.evidence, se.eventTTL, se.now())
 	p := seancePage{
 		UI:            chromeFor(r, ui),
 		Lang:          se.lang,
@@ -623,7 +631,8 @@ func (se *seance) pageData(r *http.Request, ui string) seancePage {
 		Total:         used + left,
 		Exhausted:     left == 0,
 		Turns:         html,
-		Evidence:      se.evidence,
+		Evidence:      cards,
+		Memory:        memory,
 		PostmortemURL: seancePostmortemURL(se.id),
 		SpellURL:      seanceSpellURL(se.id),
 	}
