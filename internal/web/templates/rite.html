@@ -1,0 +1,41 @@
+{{/* Casting (Requirement 19): the form under the spell, its result and the vitals check. */}}
+
+{{define "cast_form"}}<section class="cast" id="cast-panel" aria-labelledby="cast-heading">
+  <h3 id="cast-heading">{{T "cast_heading"}}</h3>
+  {{if .Blocked}}<p class="cast-blocked" data-cast="off">{{.Blocked}}</p>
+  {{else}}
+  <p class="cast-warning">{{Tf "cast_warning" .Target .Namespace}}</p>
+  <form class="cast-form" data-cast="on" hx-target="#cast-result" hx-swap="innerHTML"
+        hx-on::before-swap="if(event.detail.xhr.status>=400&&event.detail.xhr.status<500){event.detail.shouldSwap=true;event.detail.isError=false}">
+    <p class="cast-kind">{{.Kind}} · <code>{{.Target}}</code></p>
+    {{range .Inputs}}<label class="cast-input">{{.Label}}
+      {{if eq .Kind "textarea"}}<textarea name="{{.Name}}" rows="8" spellcheck="false" required></textarea>
+      {{else if eq .Kind "number"}}<input type="number" name="{{.Name}}" min="{{.Min}}" max="{{.Max}}" required>
+      {{else}}<input type="text" name="{{.Name}}" autocomplete="off" required>{{end}}
+    </label>
+    {{end}}
+    <label class="cast-confirm"><input type="checkbox" name="confirm" value="yes"> {{T "cast_confirm"}}</label>
+    <div class="cast-buttons">
+      <button type="button" class="cast-dry" hx-post="{{.URL}}" hx-include="closest form" hx-vals='{"mode":"dry"}'>{{T "cast_dry_button"}}</button>
+      <button type="button" class="cast-real" hx-post="{{.URL}}" hx-include="closest form" hx-vals='{"mode":"cast"}'>{{T "cast_button"}}</button>
+    </div>
+  </form>
+  <div id="cast-result" class="cast-result" role="status" aria-live="polite"></div>
+  {{end}}
+</section>{{end}}
+
+{{define "cast_error"}}<p class="cast-error" role="alert">{{.}}</p>{{end}}
+
+{{define "cast_result"}}<div class="cast-outcome {{if .OK}}cast-ok{{else}}cast-failed{{end}}" data-mode="{{.Mode}}">
+  <p>{{if .DryRun}}{{if .OK}}{{Tf "cast_dry_ok" .Target}}{{else}}{{Tf "cast_dry_failed" .Target}}{{end}}{{else}}{{if .OK}}{{Tf "cast_ok" .Target}}{{else}}{{Tf "cast_failed" .Target}}{{end}}{{end}}</p>
+  {{with .Error}}<pre class="cast-error-text">{{.}}</pre>{{end}}
+  <ol class="cast-requests">{{range .Result.Requests}}<li class="{{if .OK}}req-ok{{else}}req-failed{{end}}"><code>{{.Verb}} {{.Resource}} {{.Name}}</code>{{if .Write}} · {{if $.DryRun}}{{T "cast_req_dry"}}{{else}}{{T "cast_req_write"}}{{end}}{{end}}{{with .Error}} · {{.}}{{end}}</li>{{end}}</ol>
+  {{if .CanCast}}<p class="cast-next">{{T "cast_next"}}</p>{{end}}
+  {{if .Vitals}}<div class="vitals" hx-get="{{.Vitals}}" hx-trigger="load delay:3s" hx-swap="outerHTML"><p>{{T "vitals_waiting"}}</p></div>{{end}}
+</div>{{end}}
+
+{{define "vitals"}}<div class="vitals vitals-{{.State}}" data-state="{{.State}}"{{if .Poll}} hx-get="{{.URL}}" hx-trigger="load delay:3s" hx-swap="outerHTML"{{end}}>
+  <p class="vitals-state">{{.StateText}}</p>
+  {{if .Pods}}<ul class="vitals-pods">{{range .Pods}}<li><code>{{.Name}}</code>{{if .New}} · {{T "vitals_new"}}{{end}} · {{if .Ready}}{{Tf "vitals_ready" .ReadySeconds}}{{else if .Failing}}{{.Failing}}{{else}}{{T "vitals_not_ready"}}{{end}}</li>{{end}}</ul>{{end}}
+  {{with .AltarURL}}<p><a href="{{.}}">{{T "vitals_altar"}}</a></p>{{end}}
+</div>{{end}}

@@ -1,6 +1,6 @@
 {{define "spell"}}<section class="spell" id="spell-panel" aria-label="{{T "spell_aria"}}">
   <p class="spell-incantation">{{.Incantation}}</p>
-  <p class="spell-note">{{T "spell_note"}}</p>
+  <p class="spell-note">{{if .Cast.Blocked}}{{T "spell_note"}}{{else}}{{T "spell_note_cast"}}{{end}}</p>
 
   <h3>{{T "spell_diagnosis"}}</h3>
   <ul class="spell-diagnosis">{{range .Diagnosis}}<li>{{.}}</li>{{end}}</ul>
@@ -24,6 +24,8 @@
 
   <h3>{{T "spell_caveats"}}</h3>
   <ul class="spell-caveats">{{range .Caveats}}<li>{{.}}</li>{{end}}</ul>
+
+  {{template "cast_form" .Cast}}
   <script>
   (function () {
     var root = document.getElementById('spell-panel');

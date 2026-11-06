@@ -14,12 +14,17 @@ import (
 const (
 	defaultMaxCalls                  = 6
 	defaultMaxInputTokens            = 6000
+	defaultMaxTotalInputTokens       = 30000
 	defaultMaxOutputTokens           = 400
 	defaultMaxPostmortemOutputTokens = 1500
 )
 
 // EnvMaxCalls overrides Limits.MaxCalls when it holds a positive integer.
 const EnvMaxCalls = "SEANCE_BUDGET_MAX_CALLS"
+
+// EnvMaxTotalInputTokens overrides Limits.MaxTotalInputTokens when it holds a
+// positive integer.
+const EnvMaxTotalInputTokens = "SEANCE_BUDGET_MAX_TOTAL_INPUT_TOKENS"
 
 // HistoryRounds is how many user/assistant rounds TrimHistory keeps.
 const HistoryRounds = 4
@@ -44,7 +49,8 @@ func IsExhaustedLine(s string) bool {
 	return s == ExhaustedLine || s == ExhaustedLineEN
 }
 
-// ErrBudgetExhausted is returned by Budget.Stream once MaxCalls calls have been used.
+// ErrBudgetExhausted is returned by Budget.Stream once MaxCalls calls have been
+// used, or once the séance's total input would pass MaxTotalInputTokens.
 var ErrBudgetExhausted = errors.New("llm: budget exhausted")
 
 // ErrInputTooLarge is returned when the input still exceeds MaxInputTokens after
@@ -56,32 +62,49 @@ var ErrInputTooLarge = errors.New("llm: input exceeds per-call token limit")
 // MaxOutputTokens applies to every call except the postmortem call, which is
 // identified by TurnIndex == PostmortemTurnIndex and capped by
 // MaxPostmortemOutputTokens instead. Both count as one call against MaxCalls.
+//
+// MaxInputTokens caps one call. MaxTotalInputTokens caps the estimated input of
+// all calls of the séance together (spec §7.8: at most 30k per séance).
 type Limits struct {
 	MaxCalls                  int
 	MaxInputTokens            int
+	MaxTotalInputTokens       int
 	MaxOutputTokens           int
 	MaxPostmortemOutputTokens int
 }
 
-// DefaultLimits returns 6 calls, 6000 input tokens, 400 output tokens per chat call
-// and 1500 output tokens for the postmortem call.
+// DefaultLimits returns 6 calls, 6000 input tokens per call, 30000 input tokens
+// per séance, 400 output tokens per chat call and 1500 output tokens for the
+// postmortem call.
 func DefaultLimits() Limits {
 	return Limits{
 		MaxCalls:                  defaultMaxCalls,
 		MaxInputTokens:            defaultMaxInputTokens,
+		MaxTotalInputTokens:       defaultMaxTotalInputTokens,
 		MaxOutputTokens:           defaultMaxOutputTokens,
 		MaxPostmortemOutputTokens: defaultMaxPostmortemOutputTokens,
 	}
 }
 
-// LimitsFromEnv returns DefaultLimits with MaxCalls set from SEANCE_BUDGET_MAX_CALLS.
-// Values that are not positive integers are ignored.
+// LimitsFromEnv returns DefaultLimits with MaxCalls set from
+// SEANCE_BUDGET_MAX_CALLS and MaxTotalInputTokens from
+// SEANCE_BUDGET_MAX_TOTAL_INPUT_TOKENS. Values that are not positive integers
+// are ignored.
 func LimitsFromEnv() Limits {
 	l := DefaultLimits()
-	if n, err := strconv.Atoi(strings.TrimSpace(os.Getenv(EnvMaxCalls))); err == nil && n > 0 {
+	if n, ok := positiveEnv(EnvMaxCalls); ok {
 		l.MaxCalls = n
 	}
+	if n, ok := positiveEnv(EnvMaxTotalInputTokens); ok {
+		l.MaxTotalInputTokens = n
+	}
 	return l
+}
+
+// positiveEnv reads a positive integer from the environment variable name.
+func positiveEnv(name string) (int, bool) {
+	n, err := strconv.Atoi(strings.TrimSpace(os.Getenv(name)))
+	return n, err == nil && n > 0
 }
 
 // Budget wraps a Provider and enforces Limits. It is safe for concurrent use.
@@ -94,6 +117,12 @@ type Budget struct {
 	mu     sync.Mutex
 	used   int
 	totals Usage
+	// inputUsed is the input counted against MaxTotalInputTokens: for each call,
+	// the larger of the estimate and the input tokens the provider reported.
+	inputUsed int
+	// drained is set once a call was refused because the séance's total input
+	// was spent. No call is made after that.
+	drained bool
 }
 
 var _ Provider = (*Budget)(nil)
@@ -107,6 +136,9 @@ func NewBudget(p Provider, l Limits) *Budget {
 	if l.MaxInputTokens <= 0 {
 		l.MaxInputTokens = d.MaxInputTokens
 	}
+	if l.MaxTotalInputTokens <= 0 {
+		l.MaxTotalInputTokens = d.MaxTotalInputTokens
+	}
 	if l.MaxOutputTokens <= 0 {
 		l.MaxOutputTokens = d.MaxOutputTokens
 	}
@@ -119,18 +151,29 @@ func NewBudget(p Provider, l Limits) *Budget {
 // Stream implements Provider. When the budget is spent it emits
 // ExhaustedLineFor(req.Lang) as a single fragment and returns
 // ErrBudgetExhausted without calling the inner provider.
-// Otherwise it trims the request to the input limit, clamps MaxTokens to the output
-// limit for the call, counts the call and delegates. If onDelta fails, that error is returned.
+// Otherwise it trims the request to the input limit of the call (the smaller of
+// MaxInputTokens and what is left of MaxTotalInputTokens), clamps MaxTokens to
+// the output limit for the call, counts the call and its input, and delegates.
+// A request that fits MaxInputTokens but not the rest of the séance's total
+// input spends the budget: the call is refused as exhausted. If onDelta fails,
+// that error is returned.
 func (b *Budget) Stream(ctx context.Context, req ChatRequest, onDelta func(string) error) (Usage, error) {
 	if b.Exhausted() {
 		return b.exhaustedReply(req.Lang, onDelta)
 	}
-	prepared, err := b.prepare(req)
+	prepared, estimate, err := b.prepare(req)
+	if errors.Is(err, errTotalInputSpent) {
+		b.mu.Lock()
+		b.drained = true
+		b.mu.Unlock()
+		return b.exhaustedReply(req.Lang, onDelta)
+	}
 	if err != nil {
 		return Usage{}, err
 	}
-	if !b.claim() {
-		// Another call used the last slot while this one was preparing.
+	if !b.claim(estimate) {
+		// Another call used the last slot, or the rest of the input, while this
+		// one was preparing.
 		return b.exhaustedReply(req.Lang, onDelta)
 	}
 
@@ -139,6 +182,9 @@ func (b *Budget) Stream(ctx context.Context, req ChatRequest, onDelta func(strin
 	b.mu.Lock()
 	b.totals.InputTokens += usage.InputTokens
 	b.totals.OutputTokens += usage.OutputTokens
+	if usage.InputTokens > estimate {
+		b.inputUsed += usage.InputTokens - estimate
+	}
 	b.mu.Unlock()
 	return usage, err
 }
@@ -152,34 +198,65 @@ func (b *Budget) exhaustedReply(lang string, onDelta func(string) error) (Usage,
 	return Usage{}, ErrBudgetExhausted
 }
 
-// prepare trims history until the estimated input fits MaxInputTokens and clamps
-// MaxTokens to the output limit of the call. It returns ErrInputTooLarge when the
-// evidence and the last user message alone do not fit.
-func (b *Budget) prepare(req ChatRequest) (ChatRequest, error) {
-	msgs := trimToFit(req, b.limits.MaxInputTokens)
+// errTotalInputSpent is returned by prepare when a request fits the per-call
+// limit but not what is left of the séance's total input.
+var errTotalInputSpent = errors.New("llm: séance input budget spent")
+
+// prepare trims history until the estimated input fits the call's input limit
+// and clamps MaxTokens to the output limit of the call. It returns the prepared
+// request and its estimated input. It returns ErrInputTooLarge when the
+// evidence and the last user message alone do not fit MaxInputTokens, and
+// errTotalInputSpent when they fit that but not the rest of the total.
+func (b *Budget) prepare(req ChatRequest) (ChatRequest, int, error) {
+	limit := min(b.limits.MaxInputTokens, b.InputRemaining())
+	msgs := trimToFit(req, limit)
 	req.Messages = msgs
-	if estimateTokens(req) > b.limits.MaxInputTokens {
-		return ChatRequest{}, ErrInputTooLarge
+	est := estimateTokens(req)
+	if est > limit {
+		if est > b.limits.MaxInputTokens {
+			return ChatRequest{}, 0, ErrInputTooLarge
+		}
+		return ChatRequest{}, 0, errTotalInputSpent
 	}
-	limit := b.limits.MaxOutputTokens
+	out := b.limits.MaxOutputTokens
 	if req.TurnIndex == PostmortemTurnIndex {
-		limit = b.limits.MaxPostmortemOutputTokens
+		out = b.limits.MaxPostmortemOutputTokens
 	}
-	if req.MaxTokens <= 0 || req.MaxTokens > limit {
-		req.MaxTokens = limit
+	if req.MaxTokens <= 0 || req.MaxTokens > out {
+		req.MaxTokens = out
 	}
-	return req, nil
+	return req, est, nil
 }
 
-// claim reserves one call slot. It returns false when the budget is spent.
-func (b *Budget) claim() bool {
+// claim reserves one call slot and input tokens for it. It returns false when
+// the budget is spent or the input no longer fits.
+func (b *Budget) claim(input int) bool {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	if b.used >= b.limits.MaxCalls {
+	if b.drained || b.used >= b.limits.MaxCalls {
+		return false
+	}
+	if b.inputUsed+input > b.limits.MaxTotalInputTokens {
+		b.drained = true
 		return false
 	}
 	b.used++
+	b.inputUsed += input
 	return true
+}
+
+// InputUsed returns the input tokens counted against MaxTotalInputTokens.
+func (b *Budget) InputUsed() int {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.inputUsed
+}
+
+// InputRemaining returns how much of MaxTotalInputTokens is left. It is never negative.
+func (b *Budget) InputRemaining() int {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return max(0, b.limits.MaxTotalInputTokens-b.inputUsed)
 }
 
 // Used returns the number of calls counted so far.
@@ -189,10 +266,14 @@ func (b *Budget) Used() int {
 	return b.used
 }
 
-// Remaining returns how many calls are left. It is never negative.
+// Remaining returns how many calls are left. It is never negative, and it is
+// 0 once a call was refused because the séance's total input was spent.
 func (b *Budget) Remaining() int {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	if b.drained {
+		return 0
+	}
 	return max(0, b.limits.MaxCalls-b.used)
 }
 

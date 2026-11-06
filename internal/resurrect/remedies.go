@@ -57,6 +57,10 @@ func (c *caster) oom() {
 		checks.Title = c.t("查看现在的资源设置，以及节点还剩多少内存", "Look at the current resources and how much memory the node has left")
 		checks.Commands = append(checks.Commands, "kubectl describe node "+shq(c.a.NodeName))
 	}
+	if act := c.action(ActionPatch); act != nil {
+		act.Patch = patch
+		c.sp.Action = act
+	}
 	c.sp.Steps = append(c.sp.Steps, checks, c.fileStep(patch),
 		c.applyFix(c.t("施法：调高 memory limit", "Cast: raise the memory limit"),
 			"kubectl patch "+c.sp.Target.ref()+" "+c.nsFlag()+" --type=strategic --patch-file="+c.sp.PatchFile),
@@ -203,6 +207,11 @@ func (c *caster) mountConfig(ct *autopsy.ContainerAutopsy, file, line string) {
 		"    configMap:",
 		"      name: " + yq(cm),
 	})
+	if act := c.action(ActionConfigMapMount); act != nil {
+		act.Patch, act.ConfigMap, act.ConfigKey, act.MountPath = patch, cm, key, file
+		act.Inputs = []Input{{Name: InputConfig, Kind: "textarea"}}
+		c.sp.Action = act
+	}
 	configFile := need("CONFIG_FILE", c.t("本地 "+key+" 的路径，内容要你自己确认", "path to your local "+key+", reviewed by you"))
 	c.sp.Steps = append(c.sp.Steps,
 		Step{Kind: StepCheck, Title: c.t("再看一眼遗言，确认缺的就是这个文件", "Read the last words again and confirm this is the missing file"),
@@ -431,6 +440,11 @@ func (c *caster) setImage(ct *autopsy.ContainerAutopsy, repo, tag, imgCite strin
 		ct.Name, ct.Image, imgCite, shown, c.pullCite(imageMissing)),
 		c.t("证据给不出正确的 tag，所以命令里用 ${NEW_TAG}，由你填写。",
 			"The evidence cannot tell the right tag, so the commands use ${NEW_TAG}, which you set."))
+	if act := c.action(ActionSetImage); act != nil {
+		act.Repo, act.CurrentTag = repo, tag
+		act.Inputs = []Input{{Name: InputTag, Kind: "text"}}
+		c.sp.Action = act
+	}
 	newTag := need("NEW_TAG", c.t("设为仓库里真实存在的 tag", "set it to a tag that exists in the registry"))
 	newImage := shq(repo) + ":" + newTag
 	c.sp.Steps = append(c.sp.Steps,
@@ -579,6 +593,14 @@ func (c *caster) slowProbe(ct *autopsy.ContainerAutopsy, field, evCite string) {
 	c.sp.Steps = append(c.sp.Steps, Step{Kind: StepCheck, Title: c.t("查看探针现在的设置和失败事件", "Look at the probe settings and its failures"),
 		Commands: []string{c.targetCheck(field), c.eventsCheck()}})
 	if dnsLabel.MatchString(ct.Name) {
+		if act := c.action(ActionPatch); act != nil {
+			act.Probe = field
+			act.Inputs = []Input{
+				{Name: InputTimeoutSeconds, Kind: "number", Min: 1, Max: maxProbeTimeout},
+				{Name: InputFailureThreshold, Kind: "number", Min: 1, Max: maxProbeFailures},
+			}
+			c.sp.Action = act
+		}
 		patch := `'{"spec":{"template":{"spec":{"containers":[{"name":"` + ct.Name + `","` + field + `":{"timeoutSeconds":'` +
 			need("TIMEOUT_SECONDS", c.t("新的 timeoutSeconds", "new timeoutSeconds")) + `',"failureThreshold":'` +
 			need("FAILURE_THRESHOLD", c.t("新的 failureThreshold", "new failureThreshold")) + `'}}]}}}}'`

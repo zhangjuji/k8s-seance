@@ -88,6 +88,9 @@ type Spell struct {
 	Patch string `json:"patch,omitempty"`
 	// PatchFile is the file name the commands use for Patch: resurrect-<pod>.yaml.
 	PatchFile string `json:"patchFile,omitempty"`
+	// Action is the spell in a form internal/rite can cast (Requirement 19.2),
+	// or nil when the spell can only be read.
+	Action *Action `json:"action,omitempty"`
 }
 
 // Cast builds the spell for a, using the classification and the numbered

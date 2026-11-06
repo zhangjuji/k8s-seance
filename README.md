@@ -2,7 +2,7 @@
 
 Summon the ghost of a dead Kubernetes Pod. It tells, in the first person, how it died, using only read-only data from the cluster: pod status, exit codes, events and log tails. When the séance ends, it writes a postmortem in Markdown.
 
-K8s Séance is a single Go binary with a local web UI. It never writes to the cluster. It also runs without a cluster or an API key, using recorded fixtures.
+K8s Séance is a single Go binary with a local web UI. By default it never writes to the cluster. The one exception is opt-in: started with `--allow-resurrect`, it can cast a resurrection spell on a demo cluster (see [Casting](#casting-allow-resurrect)). It also runs without a cluster or an API key, using recorded fixtures.
 
 Status: in progress (Kiroween 2026, Frankenstein track).
 
@@ -14,6 +14,7 @@ Status: in progress (Kiroween 2026, Frankenstein track).
 - **Séance chat.** The ghost opens with a statement, then answers your questions as streamed text. Each answer cites evidence as `[E#]`. Click a citation to open the evidence card.
 - **Spirit board.** The séance page has a foldable **降灵板** (spirit board). Its runes are the séance's evidence IDs, placed on one arc (up to 10) or two, with YES, NO, GOODBYE and a number row. While an answer streams, the planchette moves to each `[E#]` it cites, one step every 750 ms, and lights that evidence card. When the answer ends it moves to YES, or to NO and shakes when the fact check found a contradiction. After a postmortem it moves to GOODBYE. Answers render `**bold**` and `` `code` `` after HTML escaping, so a reply cannot inject tags. The forgetting panel starts folded and opens by itself when its key memory has less than 15 minutes left.
 - **Resurrection spell.** The **念出复活咒语** (speak the resurrection spell) button on the séance page shows a fix plan built by rules from the collected autopsy, with no LLM call and no cluster call: a diagnosis that cites `[E#]`, the target object (a Deployment inferred from a ReplicaSet is marked as inferred), steps and caveats. Each step is labelled read-only, patch file, cast (writes to the cluster) or confirm, and every command that writes is preceded by the same command with `--dry-run=server`. K8s Séance never runs these commands. Values the evidence cannot give, such as a new image tag or a local config file, are shell variables like `${NEW_TAG:?}`, so the command stops when they are unset. The patch downloads as `resurrect-<pod>.yaml` (`GET /api/seances/{id}/spell.yaml`), and the JSON is at `GET /api/seances/{id}/spell`. On the kind demo, the spells for `oom.yaml` (memory limit 64Mi to 128Mi) and `crashloop.yaml` (a ConfigMap mounted at `/etc/app/config.yaml`) bring the Pods back.
+- **Casting.** Off by default. With `--allow-resurrect` and a cluster spirit, the spell panel gets a cast form for the spells that a machine can run: raise the memory limit, mount the missing config file (you paste its content, it goes into a ConfigMap), set an image tag you type, roll a Deployment back to the revision that is still alive, or give a probe more time. Every cast is rehearsed first with `dryRun=All`. After a real cast, the page checks the family read-only every 3 seconds for up to 4 minutes and reports revived, fell again or waiting. A revived spirit that is on the altar gets a **🌅 已复活** (revived) mark on its photo. See [Casting](#casting-allow-resurrect).
 - **Family and rebirths.** When the spirit belongs to a Deployment, StatefulSet or DaemonSet, summoning it makes one more read-only Pod list in its namespace and groups the family by `pod-template-hash` or `controller-revision-hash` into siblings (same revision) and other revisions (older: former life, newer: later life). For each other revision it compares the Pod template with the spirit's: image, command, args, environment variables, resources, probes, ports and mounts of each container, plus the ServiceAccount, nodeSelector and volumes. Environment values follow the evidence redaction rules: a variable whose name looks like a secret never shows its value, a value from a Secret or ConfigMap shows only the reference, and a hidden value that changed is shown as "changed (value hidden)". The verdict is, in this order: a living sibling means an instance problem (both nodes are shown); a living Pod of another revision while none of this revision lives means the release broke it; otherwise the whole family is dead, so check what they share. The family and the verdict become `lineage` evidence (`[E#]`, after the events), the séance page shows a **家族与转世** (family and rebirths) panel with a difference table, and `GET /api/seances/{id}` includes it as `lineage`. When the release broke it and the living revision is older, the mock opening says so and the resurrection spell rolls back first (`kubectl rollout undo` with `--dry-run=server` before it) and says that a rollback only stops the bleeding. If the list fails or is forbidden, the spirit is summoned without a family. Sample mode has no family record.
 - **Postmortem.** Markdown with a copy button and a `.md` download. The timeline, evidence and impact sections come from the collected data. The LLM writes only the summary, root cause, remediation and action items. If the LLM is unavailable or the call budget is spent, a rule-based template fills those sections instead.
 - **Graveyard.** Each generated postmortem also becomes a tombstone in a local JSON file: Pod name, namespace, birth and death times, cause, an epitaph (the postmortem's last words) and the postmortem itself. Generating the postmortem again for the same Pod replaces its tombstone. The **祭坛 / Ofrenda** page at `/graveyard` shows the tombstones as a Día de los Muertos altar drawn only in CSS: papel picado flags, stepped tiers with the most recent deaths on top (3, then 4, then 5 per tier), framed photos, candles and a marigold petal path. It uses folk elements only, no film characters, songs or names. Click a photo to open its page, in the same style, with the postmortem and a `.md` download. A spirit whose postmortem is on the altar shows **🌼 已供奉** (enshrined) in the spirit list, linked to its photo. Its row no longer fades and does not raise the forgetting banner, because the postmortem keeps its evidence. The match is by namespace and Pod name. Each tombstone also keeps its family (Deployment, StatefulSet or DaemonSet) and up to 3 **offerings**, the key evidence of that death taken from the redacted séance evidence with its `[E#]` at the time: how it died (cause and exit code), its last words (the first key log line, or the last line), the one change between two lives when a release broke it, and then by cause the memory limit, the image that could not be pulled or the first Warning event. When the enshrined Pod dies again after its postmortem (each new death time counts once), or another Pod of its family dies after it (each Pod counts once), the list records a **return** in the graveyard file. The row then shows **🕯️ 第 N 次归来** (return #N) linked to the photo, the summoning bell gives a separate notice instead of "died again" and rings twice, the photo gets one small candle per return (at most 7), and the photo page warns that the earlier fix may not have worked and lists the offerings. Generating the postmortem again resets the returns. Sample mode never records a return, because the fixtures died before any burial. The JSON list is at `/api/graveyard`, with `family`, `offerings`, `returns` and `returnLog`, and `GET /api/spirits` includes each spirit's `family`. The file defaults to `~/.k8s-seance/graveyard.json` (directory mode 0700, file mode 0600, because postmortems contain log lines). Use `-graveyard <path>` to move it, or `-graveyard ""` to turn the graveyard off. Fixture mode writes tombstones too.
@@ -151,13 +152,29 @@ chmod 600 /tmp/seance-ro.kubeconfig
 rm /tmp/seance-ro.kubeconfig
 ```
 
-The code makes no write calls. In `internal/k8s` the only API calls are `Pods(ns).List`, `Pods(ns).Get`, `Pods(ns).Watch`, `Pods(ns).GetLogs` and `Events(ns).List`. `internal/readonly_test.go` scans `internal/` for write methods (Create, Update, Patch, Delete, Evict).
+Outside `internal/rite` the code makes no write calls. In `internal/k8s` the only API calls are `Pods(ns).List`, `Pods(ns).Get`, `Pods(ns).Watch`, `Pods(ns).GetLogs` and `Events(ns).List`. `internal/readonly_test.go` scans `internal/` for write methods (Create, Update, Patch, Delete, Evict) and fails on any of them outside `internal/rite`. It also fails if any package other than `internal/web` imports `internal/rite`.
 
 To remove the RBAC objects:
 
 ```sh
 kubectl delete -f demo/rbac-readonly.yaml
 ```
+
+## Casting (`--allow-resurrect`)
+
+Casting writes to the cluster. Use it only on a demo cluster such as the kind demo above.
+
+```sh
+kubectl apply -f demo/rbac-readonly.yaml -f demo/rbac-resurrect.yaml
+go run ./cmd/seance -n seance-demo --allow-resurrect
+```
+
+- **Off unless asked.** Without `--allow-resurrect` the spell panel says casting is off, and `POST /api/seances/{id}/cast` and `GET /api/seances/{id}/vitals` answer 403. In sample mode the panel says the spirit comes from fixtures, and the cast answers 403 too. `--allow-resurrect` with `--fixtures`, or without a cluster connection, logs a warning and leaves casting off.
+- **Where.** Only in the namespaces of `-resurrect-ns` (comma-separated, default `seance-demo`). The server refuses to start with `--allow-resurrect` unless `-addr` is a loopback address (`localhost`, `127.0.0.1`, `[::1]`).
+- **What.** Only the target controller of the spell, and only a Deployment, StatefulSet or DaemonSet. Castable spells: `patch` (memory limit; probe `timeoutSeconds` and `failureThreshold` that you enter, 1–300 and 1–100), `set-image` (a tag you type; it must match the image tag grammar and differ from the current tag), `rollback` (Deployments only: the Pod template of the ReplicaSet at the living revision replaces the current one with a JSON Patch, which fails if the Deployment changed since it was read) and `configmap-mount` (the pasted content, at most 64 KiB, goes into a ConfigMap labelled `app.kubernetes.io/managed-by=k8s-seance`; an existing ConfigMap without that label is never overwritten). Spells that need a Secret, a debugging session or a bare Pod or Job stay read-only.
+- **How.** **试咒** (rehearse) sends every write with `dryRun=All`: the API server validates it and stores nothing. **施法** (cast) is accepted only within 10 minutes after a passing rehearsal with the same input, and only with the confirmation box ticked. Requests from another site (`Origin` of another host, or `Sec-Fetch-Site: cross-site`/`same-site`) are refused. Every write uses the field manager `k8s-seance`. The result lists each API request.
+- **Did it come back?** After a real cast the page asks `GET /api/seances/{id}/vitals?since=<unix seconds>` every 3 seconds for up to 4 minutes. That is one read-only Pod list. Revived: a Pod of the family has been running and ready for 20 seconds and no Pod is failing. Fell again: a Pod created after the cast is failing or has restarted. Otherwise waiting; a failing Pod from before the cast only keeps it waiting until it is replaced. When revived, a spirit on the altar gets `revivedAt` and `revivedBy` in `graveyard.json` and `/api/graveyard`, and a **🌅 已复活** mark on its photo.
+- **Permissions.** `demo/rbac-resurrect.yaml` is a Role and RoleBinding in `seance-demo` only, for the `k8s-seance` ServiceAccount: `get`/`patch` on deployments, statefulsets and daemonsets, `get`/`list` on replicasets, and `get`/`create`/`update` on configmaps. No delete and no Secrets. The expected `kubectl auth can-i` answers are in the file's comments.
 
 ## Cost notes
 
@@ -166,10 +183,10 @@ Limits come from `internal/llm/budget.go`. They apply to each séance created in
 - **Calls:** 6 per séance. The opening, each follow-up and each postmortem generation counts as one call, including failed calls. Mock and replay calls count too.
 - **Input:** at most 6000 tokens per call. The size is estimated as half the rune count of the message and evidence text, not with a real tokenizer. When a request is too large, the oldest history is dropped first. The last user message and the evidence are never dropped. If the request still does not fit, the call is refused without being counted, and the UI shows an error.
 - **Output:** 400 tokens per opening or follow-up call, and 1500 tokens per postmortem call. These are sent as `max_tokens`.
-- **Total tokens** are not capped. Only the call count is.
+- **Total input:** at most 30000 estimated tokens per séance, summed over all calls (the per-call estimate, or the provider's reported input tokens when they are larger). When a request fits the per-call 6000 but not what is left of the 30000, older history is dropped first. If it still does not fit, the séance is treated as out of calls: the ghost says the exhausted line, and the postmortem uses the rule template with `budget_exhausted`. Override with `SEANCE_BUDGET_MAX_TOTAL_INPUT_TOKENS` (a positive integer; other values are ignored).
 - **When the calls run out:** the next question gets the fixed line `仪式之力已耗尽，亡灵沉入黑暗……`, which means "the ritual power is spent and the ghost sinks into darkness", and no call is made. The postmortem then comes from the rule template, with the reason `budget_exhausted` shown on the page.
 - **Postmortem cost:** the postmortem button generates a new report and spends one call each time. The `.md` download reuses the stored report if one exists.
-- **Override:** `SEANCE_BUDGET_MAX_CALLS` takes a positive integer for the call limit. Other values are ignored. There is no environment variable for the token limits. The web server reads this variable. The `summon` path does not.
+- **Override:** `SEANCE_BUDGET_MAX_CALLS` takes a positive integer for the call limit. Other values are ignored. There is no environment variable for the per-call token limits. The web server reads these variables. The `summon` path does not.
 - **Opening cache:** kept in memory by the running server. The key is the Pod UID, the highest container restart count, and the model name. Only successful openings are stored. A cache hit makes no call. Restarting the server clears the cache.
 - **Trimming:** the collector keeps the last 200 log lines per container. Evidence text is capped at 24000 characters in total. Chat sends the last 4 rounds of history. The postmortem sends the last 8 transcript turns, each cut at 200 runes.
 - **Séance lifetime:** a séance is kept in memory and expires after 2 hours without use.
@@ -240,7 +257,9 @@ The repository was built with Kiro as a spec-driven project. Everything below co
 ```
 cmd/seance/          CLI entry point: web server and the summon subcommand
 internal/
-  k8s/               read-only collector (client-go): Pods List/Get/Watch/GetLogs, Events List; family (lineage.go)
+  k8s/               read-only collector (client-go): Pods List/Get/Watch/GetLogs, Events List; family (lineage.go); vitals after a cast (vitals.go)
+  resurrect/         rule-based resurrection spell and its castable Action (no LLM, no cluster)
+  rite/              the only package that writes to the cluster, used only with --allow-resurrect
   autopsy/           PodAutopsy model, death-cause classifier, evidence builder
   spirit/            persona prompts (go:embed), séance session, chat
   postmortem/        Markdown postmortem generator and template
@@ -248,7 +267,7 @@ internal/
   graveyard/         local tombstone file (graveyard.json): one tombstone per Pod with its postmortem
   web/               net/http routes, SSE stream, html/template views, static assets
 fixtures/            embedded offline spirits (*.json) and fixtures/replay/ recorded replies
-demo/                kind config, four death manifests, kill-them-all.sh, read-only RBAC
+demo/                kind config, four death manifests, kill-them-all.sh, read-only and casting RBAC
 docs/                notes and screenshots (placeholder)
 .kiro/               specs and steering
 ```

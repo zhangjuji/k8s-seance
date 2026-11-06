@@ -43,6 +43,8 @@ type spellView struct {
 	Patch       string
 	PatchFile   string
 	PatchURL    string
+	// Cast is the cast form, or the reason there is none (Requirement 19.1).
+	Cast castForm
 }
 
 // spellStepView is one step with its label in the interface language.
@@ -77,6 +79,7 @@ func (s *Server) handleSpell(w http.ResponseWriter, r *http.Request) {
 		Patch:       sp.Patch,
 		PatchFile:   sp.PatchFile,
 		PatchURL:    patchURL,
+		Cast:        s.castFormFor(se, sp, lang),
 	}
 	for _, d := range sp.Diagnosis {
 		v.Diagnosis = append(v.Diagnosis, se.linkEvidence(d))

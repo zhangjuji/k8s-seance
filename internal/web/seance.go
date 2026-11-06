@@ -124,6 +124,9 @@ type seance struct {
 	// lastSeen is guarded by seanceStore.mu.
 	lastSeen time.Time
 
+	// cast records rehearsals and casts (Requirement 19). It has its own lock.
+	cast castState
+
 	// askMu serializes questions, so the transcript and the turn list stay in the same order.
 	askMu sync.Mutex
 

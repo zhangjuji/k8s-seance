@@ -623,6 +623,8 @@ tr.memory-enshrined .memory-count { margin-left: 0.4rem; }
 .return-mark { color: var(--flame-soft); white-space: nowrap; text-decoration: none; font-size: 0.85rem; }
 .return-mark:hover { text-decoration: underline; }
 .photo-family { color: var(--muted); font-size: 0.8rem; }
+.revived-mark { display: inline-block; margin-top: 0.4rem; padding: 0.1rem 0.5rem; border: 1px solid #f2b134; border-radius: 999px; color: #f2b134; font-size: 0.8rem; }
+.revived-banner { border-color: #f2b134; }
 .return-banner { max-width: 40rem; margin: 0.5rem auto 1rem; }
 .return-banner p { margin: 0 0 0.35rem; }
 .return-log { margin: 0; padding-left: 1.2rem; font-size: 0.85rem; }
@@ -1027,3 +1029,19 @@ tr.memory-vanishing .memory-count,
   .planchette { transition: none; }
   .planchette.planchette-no { animation: none; }
 }
+
+/* Casting (Requirement 19) */
+.cast { margin-top: 1.5rem; padding: 1rem; border: 1px dashed var(--muted); border-radius: 0.5rem; }
+.cast-blocked { color: var(--muted); }
+.cast-warning { color: #f2b134; }
+.cast-form { display: grid; gap: 0.75rem; }
+.cast-input { display: grid; gap: 0.25rem; }
+.cast-input textarea, .cast-input input { width: 100%; font-family: ui-monospace, monospace; }
+.cast-buttons { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+.cast-real { border-color: #c0392b; }
+.cast-error, .cast-failed { color: #e74c3c; }
+.cast-ok { color: inherit; }
+.cast-requests { font-size: 0.85rem; }
+.req-failed { color: #e74c3c; }
+.vitals-revived .vitals-state { color: #f2b134; font-weight: bold; }
+.vitals-dying .vitals-state { color: #e74c3c; font-weight: bold; }

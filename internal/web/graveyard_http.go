@@ -71,6 +71,9 @@ type tombstoneItem struct {
 	Offerings []graveyard.Offering `json:"offerings"`
 	Returns   int                  `json:"returns"`
 	ReturnLog []graveyard.Return   `json:"returnLog"`
+	// RevivedAt is set when a cast brought the spirit back (Requirement 19.4).
+	RevivedAt *time.Time `json:"revivedAt,omitempty"`
+	RevivedBy string     `json:"revivedBy,omitempty"`
 }
 
 // graveyardResponse is the body of GET /api/graveyard.
@@ -107,6 +110,8 @@ func (s *Server) handleGraveyardAPI(w http.ResponseWriter, r *http.Request) {
 			Offerings:     nonNil(t.Offerings),
 			Returns:       len(t.Returns),
 			ReturnLog:     nonNil(t.Returns),
+			RevivedAt:     timePtr(t.RevivedAt),
+			RevivedBy:     t.RevivedBy,
 		})
 	}
 	writeJSON(w, http.StatusOK, graveyardResponse{Tombstones: items})
@@ -142,6 +147,10 @@ type stoneView struct {
 	Returns   int
 	Candles   []struct{}
 	ReturnLog []returnView
+	// Revived is set when a cast brought the spirit back (Requirement 19.4).
+	Revived   bool
+	RevivedAt string
+	RevivedBy string
 }
 
 // maxCandles is the number of return candles drawn on one photo.
@@ -179,6 +188,11 @@ func stoneOf(t graveyard.Tombstone) stoneView {
 		Family:     t.Family,
 		Returns:    len(t.Returns),
 		Candles:    make([]struct{}, min(len(t.Returns), maxCandles)),
+		Revived:    !t.RevivedAt.IsZero(),
+		RevivedBy:  t.RevivedBy,
+	}
+	if v.Revived {
+		v.RevivedAt = formatTime(timePtr(t.RevivedAt))
 	}
 	for _, o := range t.Offerings {
 		v.Offerings = append(v.Offerings, offeringView{Kind: o.Kind, LabelKey: "offering_" + o.Kind, Text: o.Text, Evidence: o.Evidence})

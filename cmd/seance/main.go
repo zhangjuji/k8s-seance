@@ -3,11 +3,14 @@
 //
 // Usage:
 //
-//	seance [-addr localhost:6660] [-n namespace] [-kubeconfig path] [-tail 200] [-graveyard path] [-lang zh|en] [-event-ttl 1h] [-fixtures] [-replay | -mock]
+//	seance [-addr localhost:6660] [-n namespace] [-kubeconfig path] [-tail 200] [-graveyard path] [-lang zh|en] [-event-ttl 1h] [-fixtures] [-replay | -mock] [-allow-resurrect [-resurrect-ns seance-demo]]
 //	seance summon [-n namespace] [-kubeconfig path] [-pod name] [-tail 200] [-fixtures] [-replay | -mock]
 //
-// The command is read-only: it only lists and gets Pods, reads their logs and
-// lists Events. With -fixtures it reads the embedded recordings, never loads a
+// The command is read-only by default: it only lists and gets Pods, reads their
+// logs and lists Events. The one exception is -allow-resurrect: then the séance
+// page can cast a resurrection spell through internal/rite, only in the
+// namespaces of -resurrect-ns (default seance-demo), only when the server
+// listens on a loopback address, and only after a server-side dry run. With -fixtures it reads the embedded recordings, never loads a
 // kubeconfig and never touches a cluster. If the cluster cannot be set up at
 // startup, the web UI still starts and shows the reason with a link to fixture mode.
 // With SEANCE_RECORD=1 the summon subcommand also writes each collected Pod to
@@ -38,6 +41,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"syscall"
 	"time"
@@ -85,9 +89,11 @@ func runServe(args []string) error {
 	useMock := fs.Bool("mock", false, "LLM replies from the built-in template, no API calls")
 	graveyardPath := fs.String("graveyard", defaultGraveyardPath(), "tombstone file for generated postmortems (empty: graveyard off)")
 	uiLang := fs.String("lang", "", "default UI language, zh or en (empty: from the browser's Accept-Language)")
+	allowResurrect := fs.Bool("allow-resurrect", false, "let the séance page cast resurrection spells (writes to the cluster; demo clusters only)")
+	resurrectNS := fs.String("resurrect-ns", "seance-demo", "comma-separated namespaces where -allow-resurrect may cast")
 	eventTTL := fs.Duration("event-ttl", autopsy.DefaultEventTTL, "event TTL of the cluster's kube-apiserver (--event-ttl), for the forgetting countdown")
 	fs.Usage = func() {
-		fmt.Fprintf(fs.Output(), "Usage: seance [-addr localhost:6660] [-n namespace] [-kubeconfig path] [-tail 200] [-graveyard path] [-lang zh|en] [-event-ttl 1h] [-fixtures] [-replay | -mock]\n       seance summon [flags]   print autopsies to stdout\n\n")
+		fmt.Fprintf(fs.Output(), "Usage: seance [-addr localhost:6660] [-n namespace] [-kubeconfig path] [-tail 200] [-graveyard path] [-lang zh|en] [-event-ttl 1h] [-fixtures] [-replay | -mock] [-allow-resurrect [-resurrect-ns seance-demo]]\n       seance summon [flags]   print autopsies to stdout\n\n")
 		fs.PrintDefaults()
 	}
 	_ = fs.Parse(args) // ExitOnError: bad flags exit with status 2, -h with 0.
@@ -105,9 +111,21 @@ func runServe(args []string) error {
 		fmt.Fprintf(os.Stderr, "seance: -event-ttl %v: must be positive\n", *eventTTL)
 		os.Exit(2)
 	}
+	var castNamespaces []string
+	if *allowResurrect {
+		if castNamespaces, err = resurrectNamespaces(*resurrectNS); err != nil {
+			fmt.Fprintln(os.Stderr, "seance: -resurrect-ns:", err)
+			os.Exit(2)
+		}
+		if !loopbackAddr(*addr) {
+			fmt.Fprintf(os.Stderr, "seance: -allow-resurrect needs a loopback -addr (localhost, 127.0.0.1 or [::1]), not %q\n", *addr)
+			os.Exit(2)
+		}
+	}
 	logger := log.New(os.Stderr, "seance: ", 0)
 	provider := buildProvider(mode, os.Stderr)
 	cluster, clusterErr := openCluster(*useFixtures, *kubeconfig, *tail, *eventTTL, logger)
+	resurrect := resurrectOptions(*allowResurrect, cluster, castNamespaces, logger)
 	cfg, _ := llm.LoadConfig() // buildProvider already reported any config problem
 	grave := openGraveyard(*graveyardPath, logger)
 
@@ -123,6 +141,7 @@ func runServe(args []string) error {
 		Graveyard:        grave,
 		Lang:             *uiLang,
 		EventTTL:         *eventTTL,
+		Resurrect:        resurrect,
 	})
 	if err != nil {
 		return err
@@ -169,6 +188,56 @@ func openCluster(fixturesOnly bool, kubeconfig string, tail int, eventTTL time.D
 		return nil, err
 	}
 	return web.ClusterSource{Client: cs, Tail: tail, EventTTL: eventTTL}, nil
+}
+
+// resurrectNamespaces splits -resurrect-ns. Each name must be a DNS label.
+func resurrectNamespaces(v string) ([]string, error) {
+	var out []string
+	for _, part := range strings.Split(v, ",") {
+		ns := strings.TrimSpace(part)
+		if ns == "" {
+			continue
+		}
+		if len(ns) > 63 || !dnsLabel.MatchString(ns) {
+			return nil, fmt.Errorf("%q is not a namespace name", ns)
+		}
+		out = append(out, ns)
+	}
+	if len(out) == 0 {
+		return nil, errors.New("give at least one namespace")
+	}
+	return out, nil
+}
+
+// dnsLabel is the Kubernetes rule for namespace names.
+var dnsLabel = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`)
+
+// loopbackAddr reports whether addr listens only on this machine.
+func loopbackAddr(addr string) bool {
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		return false
+	}
+	if host == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
+// resurrectOptions turns on casting when -allow-resurrect is set and a cluster
+// is available. Without a cluster (or in -fixtures mode) casting stays off.
+func resurrectOptions(allow bool, cluster web.Source, namespaces []string, logger *log.Logger) *web.Resurrect {
+	if !allow {
+		return nil
+	}
+	cs, ok := cluster.(web.ClusterSource)
+	if !ok || cs.Client == nil {
+		logger.Printf("warning: -allow-resurrect ignored: no cluster connection, casting stays off")
+		return nil
+	}
+	logger.Printf("warning: -allow-resurrect is on: the séance page can write to the cluster in namespace(s) %s (dry run first)", strings.Join(namespaces, ", "))
+	return &web.Resurrect{Client: cs.Client, Namespaces: namespaces}
 }
 
 // serveHTTP listens on addr and serves handler until SIGINT or SIGTERM, then shuts down gracefully.

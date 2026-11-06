@@ -109,8 +109,10 @@ func newMockProvider() *countingProvider {
 	return &countingProvider{inner: llm.MockProvider{}}
 }
 
+// bigLimits allows 10 calls and lifts the séance's total input cap, so tests
+// that make many calls are not cut short by the 30k total.
 func bigLimits() llm.Limits {
-	return llm.Limits{MaxCalls: 10}
+	return llm.Limits{MaxCalls: 10, MaxTotalInputTokens: 1 << 20}
 }
 
 func newCaseSession(c fixtureCase, p llm.Provider, limits llm.Limits, cache *llm.OpeningCache) *Session {

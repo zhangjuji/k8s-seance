@@ -88,6 +88,9 @@ type Options struct {
 	// (the -event-ttl flag). Zero means autopsy.DefaultEventTTL. It is used by the
 	// séance page and by the default fixture source. The cluster source has its own.
 	EventTTL time.Duration
+	// Resurrect turns on casting (Requirement 19, --allow-resurrect). Nil, the
+	// default, keeps the server read-only: the cast endpoints answer 403.
+	Resurrect *Resurrect
 }
 
 // pageSet holds the templates of every page for one interface language. Pages
@@ -111,7 +114,7 @@ func parsePageSet(lang string) (*pageSet, error) {
 	if ps.list, err = parse("templates/layout.html", "templates/spirits.html"); err != nil {
 		return nil, fmt.Errorf("parse %s templates: %w", lang, err)
 	}
-	if ps.seance, err = parse("templates/layout.html", "templates/seance.html", "templates/turn.html", "templates/postmortem.html", "templates/spell.html"); err != nil {
+	if ps.seance, err = parse("templates/layout.html", "templates/seance.html", "templates/turn.html", "templates/postmortem.html", "templates/spell.html", "templates/rite.html"); err != nil {
 		return nil, fmt.Errorf("parse %s séance templates: %w", lang, err)
 	}
 	if ps.graveyard, err = parse("templates/layout.html", "templates/altar.html", "templates/graveyard.html"); err != nil {
@@ -164,6 +167,16 @@ func New(opts Options) (*Server, error) {
 	if opts.Provider == nil {
 		opts.Provider = llm.MockProvider{}
 	}
+	if r := opts.Resurrect; r != nil {
+		if r.Client == nil || len(r.Namespaces) == 0 {
+			return nil, errors.New("resurrect: needs a cluster client and at least one namespace")
+		}
+		for _, ns := range r.Namespaces {
+			if len(ns) > 63 || !namespacePattern.MatchString(ns) {
+				return nil, fmt.Errorf("resurrect namespace %q: %w", ns, errInvalidNamespace)
+			}
+		}
+	}
 	if opts.Lang != "" {
 		l := llm.NormalizeLang(opts.Lang)
 		if l == "" {
@@ -205,6 +218,7 @@ func New(opts Options) (*Server, error) {
 	})
 	s.registerSeanceRoutes(mux)
 	s.registerSpellRoutes(mux)
+	s.registerRiteRoutes(mux)
 	s.registerGraveyardRoutes(mux)
 	s.mux = mux
 	return s, nil

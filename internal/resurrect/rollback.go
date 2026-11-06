@@ -69,6 +69,10 @@ func (c *caster) rollback(v *autopsy.Version) {
 	} else {
 		check.Commands = append(check.Commands, "kubectl get controllerrevisions "+c.nsFlag())
 	}
+	if act := c.action(ActionRollback); act != nil && t.Kind == "Deployment" {
+		act.HashLabel, act.Revision = l.HashLabel, v.Revision
+		c.sp.Action = act
+	}
 	c.sp.Steps = append(c.sp.Steps, check,
 		writeStep(c.t("施法：回滚到上一版（止血）", "Cast: roll back to the previous revision (stop the bleeding)"),
 			"kubectl rollout undo "+t.ref()+" "+c.nsFlag()),

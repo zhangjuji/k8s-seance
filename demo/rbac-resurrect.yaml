@@ -1,0 +1,57 @@
+# K8s Séance casting RBAC (Requirement 19, --allow-resurrect).
+#
+# A namespaced Role in seance-demo only, bound to the same ServiceAccount as
+# demo/rbac-readonly.yaml. Apply both: the read-only ClusterRole lets the
+# séance read Pods, logs and Events; this Role adds exactly what the four
+# castable spells write, and nothing outside seance-demo.
+#
+#   patch           -> patch deployments / statefulsets / daemonsets
+#   set-image       -> patch deployments / statefulsets / daemonsets
+#   rollback        -> get deployments, list replicasets, patch deployments
+#   configmap-mount -> get / create / update configmaps, then patch the controller
+#
+# No delete, no secrets, no pods/exec, no cluster-wide writes.
+#
+# Apply (the namespace must exist; demo/kill-them-all.sh creates it):
+#   kubectl apply -f demo/rbac-readonly.yaml -f demo/rbac-resurrect.yaml
+#
+# Verify (expected results in the comments):
+#   kubectl auth can-i --as=system:serviceaccount:seance-demo:k8s-seance patch deployments -n seance-demo   # yes
+#   kubectl auth can-i --as=system:serviceaccount:seance-demo:k8s-seance create configmaps -n seance-demo   # yes
+#   kubectl auth can-i --as=system:serviceaccount:seance-demo:k8s-seance list replicasets -n seance-demo    # yes
+#   kubectl auth can-i --as=system:serviceaccount:seance-demo:k8s-seance patch deployments -n default       # no
+#   kubectl auth can-i --as=system:serviceaccount:seance-demo:k8s-seance delete pods -n seance-demo         # no
+#   kubectl auth can-i --as=system:serviceaccount:seance-demo:k8s-seance delete configmaps -n seance-demo   # no
+#   kubectl auth can-i --as=system:serviceaccount:seance-demo:k8s-seance get secrets -n seance-demo         # no
+#
+# Remove:
+#   kubectl delete -f demo/rbac-resurrect.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: k8s-seance-resurrect
+  namespace: seance-demo
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments", "statefulsets", "daemonsets"]
+    verbs: ["get", "patch"]
+  - apiGroups: ["apps"]
+    resources: ["replicasets"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "create", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: k8s-seance-resurrect
+  namespace: seance-demo
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: k8s-seance-resurrect
+subjects:
+  - kind: ServiceAccount
+    name: k8s-seance
+    namespace: seance-demo

@@ -55,6 +55,11 @@ type Tombstone struct {
 	// Returns lists each death after the burial, oldest first. Burying the Pod
 	// again replaces the tombstone and clears them (Requirement 18.4).
 	Returns []Return `json:"returns,omitempty"`
+	// RevivedAt is when a cast brought the spirit back (Requirement 19.4), or
+	// the zero time. Burying the Pod again clears it.
+	RevivedAt time.Time `json:"revivedAt,omitzero"`
+	// RevivedBy names the spell that brought it back, such as "patch".
+	RevivedBy string `json:"revivedBy,omitempty"`
 }
 
 // Return is one visit of the dead: the enshrined Pod died again, or another
@@ -200,6 +205,7 @@ func (s *Store) Bury(t Tombstone) (Tombstone, error) {
 	t.ID = ID(t.Namespace, t.PodName, t.UID)
 	t.BuriedAt = s.now().UTC()
 	t.Returns = nil
+	t.RevivedAt, t.RevivedBy = time.Time{}, ""
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -251,6 +257,33 @@ func (s *Store) Return(id string, r Return) (Tombstone, bool, error) {
 		return *t, true, nil
 	}
 	return Tombstone{}, false, ErrNotFound
+}
+
+// Revive marks the tombstone of namespace/pod as revived at at by the spell
+// named by. It returns the tombstone and whether one was found. A tombstone
+// that is already marked keeps its first revival, and nothing is written.
+func (s *Store) Revive(namespace, pod string, at time.Time, by string) (Tombstone, bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	all, err := s.load()
+	if err != nil {
+		return Tombstone{}, false, err
+	}
+	for i := range all {
+		t := &all[i]
+		if t.Namespace != namespace || t.PodName != pod {
+			continue
+		}
+		if !t.RevivedAt.IsZero() {
+			return *t, true, nil
+		}
+		t.RevivedAt, t.RevivedBy = at.UTC(), by
+		if err := s.save(all); err != nil {
+			return Tombstone{}, false, err
+		}
+		return *t, true, nil
+	}
+	return Tombstone{}, false, nil
 }
 
 // load reads the file. A missing file is an empty graveyard. The caller holds mu.

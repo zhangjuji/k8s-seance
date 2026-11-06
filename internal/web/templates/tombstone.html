@@ -13,12 +13,14 @@
           {{if .Stone.Epitaph}}<span class="photo-epitaph">“{{.Stone.Epitaph}}”</span>{{end}}
           {{if .Stone.Family}}<span class="photo-family">{{Tf "tomb_family" .Stone.Family}}</span>{{end}}
           {{template "return_candles" .Stone}}
+          {{template "revived_mark" .Stone}}
         </span>
       </header>
       {{template "altar_step"}}
     </section>
     {{template "petal_path"}}
   </div>
+  {{if .Stone.Revived}}<p class="banner revived-banner" role="status">{{Tf "tomb_revived" .Stone.RevivedAt .Stone.RevivedBy}}</p>{{end}}
   {{if .Stone.Returns}}
   <div class="banner return-banner" role="alert">
     <p>{{Tf "tomb_returned" .Stone.Returns}}</p>

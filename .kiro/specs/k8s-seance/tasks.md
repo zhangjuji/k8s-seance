@@ -133,12 +133,12 @@
   - [x] 18.2 列表 / 招魂铃 / 祭坛 / 照片页显示归来与供品；`SpiritSummary.Family`
     - _Requirements: 18.2, 18.3, 18.5_
 
-- [ ] 19. 施法（真的复活）
-  - [ ] 19.1 `resurrect.Action`：可执行的咒语；`internal/rite`：patch / set-image / rollback / configmap-mount，支持 dry-run
+- [x] 19. 施法（真的复活）
+  - [x] 19.1 `resurrect.Action`：可执行的咒语；`internal/rite`：patch / set-image / rollback / configmap-mount，支持 dry-run
     - _Requirements: 19.2, 19.3_
-  - [ ] 19.2 `k8s.Vitals`：施法后只读确认复活；祭坛「已复活」
+  - [x] 19.2 `k8s.Vitals`：施法后只读确认复活；祭坛「已复活」
     - _Requirements: 19.4_
-  - [ ] 19.3 `--allow-resurrect`、施法表单与结果、`demo/rbac-resurrect.yaml`、只读守卫只豁免 `internal/rite`
+  - [x] 19.3 `--allow-resurrect`、施法表单与结果、`demo/rbac-resurrect.yaml`、只读守卫只豁免 `internal/rite`
     - _Requirements: 19.1, 19.5_
 
 - [ ] 9. 验收与发布

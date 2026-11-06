@@ -22,7 +22,11 @@
   {{if .Epitaph}}<span class="photo-epitaph">“{{.Epitaph}}”</span>{{end}}
   {{template "photo_offerings" .}}
   {{template "return_candles" .}}
+  {{template "revived_mark" .}}
 </span>{{end}}
+
+{{/* revived_mark: the spirit came back after a cast (Requirement 19.4). */}}
+{{define "revived_mark"}}{{if .Revived}}<span class="revived-mark" title="{{.RevivedAt}}">{{T "altar_revived"}}</span>{{end}}{{end}}
 
 {{/* photo_offerings is the short list of offerings under a photo (Requirement 18.1). */}}
 {{define "photo_offerings"}}{{if .Offerings}}<span class="photo-offerings">{{range .Offerings}}<span class="photo-offering offering-{{.Kind}}" title="{{T .LabelKey}}"><span class="offering-label">{{T .LabelKey}}</span> <span class="offering-text">{{.Text}}</span></span>{{end}}</span>{{end}}{{end}}
