@@ -125,9 +125,38 @@ func openingText(req ChatRequest) string {
 	}
 	death := deathLine(req.DeathTime)
 	if len(picked) == 0 {
-		return voiceFor(req.Cause) + death + noRecord
+		return voiceFor(req.Cause) + death + noRecord + formerLifeLine(req.Evidence, false)
 	}
-	return voiceFor(req.Cause) + death + "证据在此：" + citation(picked, false) + "。"
+	return voiceFor(req.Cause) + death + "证据在此：" + citation(picked, false) + "。" + formerLifeLine(req.Evidence, false)
+}
+
+// livingFormerLife matches the lineage evidence of an older revision with at
+// least one living Pod.
+var livingFormerLife = regexp.MustCompile(`^revision \S+ \(older, former life\): alive [1-9]\d*/`)
+
+// formerLifeLine is the opening sentence about a former life that is still
+// alive (Requirement 16.5): when the family verdict is regression, the ghost
+// says that the release broke it and cites the living revision. Otherwise "".
+func formerLifeLine(ev []autopsy.Evidence, english bool) string {
+	regression := false
+	for _, e := range ev {
+		if e.Kind == "lineage" && strings.Contains(e.Text, "verdict="+autopsy.VerdictRegression+" ") {
+			regression = true
+		}
+	}
+	if !regression {
+		return ""
+	}
+	for _, e := range ev {
+		if e.Kind != "lineage" || !livingFormerLife.MatchString(e.Text) {
+			continue
+		}
+		if english {
+			return " My former life is still alive: " + citation([]autopsy.Evidence{e}, true) + ". It was this release that broke me, so roll back first."
+		}
+		return "我的前世还活着：" + citation([]autopsy.Evidence{e}, false) + "。是这次发布把我改坏的，先回滚。"
+	}
+	return ""
 }
 
 // openingTextEN is openingText for an English séance. It uses no CJK punctuation.
@@ -137,9 +166,9 @@ func openingTextEN(req ChatRequest, picked []autopsy.Evidence) string {
 		s += " I died at " + req.DeathTime + "."
 	}
 	if len(picked) == 0 {
-		return s + " " + recordLine(true)
+		return s + " " + recordLine(true) + formerLifeLine(req.Evidence, true)
 	}
-	return s + " The evidence: " + citation(picked, true) + "."
+	return s + " The evidence: " + citation(picked, true) + "." + formerLifeLine(req.Evidence, true)
 }
 
 func voiceForEN(cause autopsy.CauseOfDeath) string {

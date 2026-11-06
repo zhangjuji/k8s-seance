@@ -37,7 +37,8 @@ var (
 )
 
 // BuildEvidence turns a PodAutopsy into numbered evidence items E1..En.
-// Items are ordered: status and spec per container, then events, then logs.
+// Items are ordered: status and spec per container, then events, then the
+// family (lineage), then logs.
 // Every Text is redacted. Once the total text would exceed MaxChars, no more
 // items are added, so the numbering stays contiguous.
 func BuildEvidence(a *PodAutopsy, opts EvidenceOptions) ([]Evidence, error) {
@@ -61,6 +62,9 @@ func BuildEvidence(a *PodAutopsy, opts EvidenceOptions) ([]Evidence, error) {
 	}
 	for _, e := range a.Events {
 		b.add("event", eventText(e), eventTime(e))
+	}
+	for _, text := range LineageTexts(a.Lineage) {
+		b.add("lineage", text, nil)
 	}
 	for _, c := range a.Containers {
 		addLogs(b, c, opts.TailLines)
@@ -139,6 +143,10 @@ func collapseDuplicates(lines []string) []string {
 	}
 	return out
 }
+
+// Redact replaces secret values in s with [REDACTED] and keeps key names
+// visible. It is the redaction rule of every evidence text.
+func Redact(s string) string { return redact(s) }
 
 // redact replaces secret values with [REDACTED] and keeps the key name visible.
 func redact(s string) string {

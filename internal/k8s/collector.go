@@ -204,7 +204,8 @@ func summarize(pod *corev1.Pod) autopsy.SpiritSummary {
 	return s
 }
 
-// CollectAutopsy reads one Pod, its Events and the log tails of its spec containers.
+// CollectAutopsy reads one Pod, its Events, the log tails of its spec containers
+// and, for a Deployment, StatefulSet or DaemonSet Pod, its family (one Pods list).
 // Only Pods.Get and Events.List errors are returned. A failed log request leaves the
 // matching tail nil instead of failing the whole autopsy (Req 2.5).
 func CollectAutopsy(ctx context.Context, cs kubernetes.Interface, namespace, pod string) (*autopsy.PodAutopsy, error) {
@@ -224,7 +225,13 @@ func CollectAutopsy(ctx context.Context, cs kubernetes.Interface, namespace, pod
 		return nil, fmt.Errorf("list events for pod %s/%s: %w", namespace, pod, err)
 	}
 
-	return buildAutopsy(ctx, cs, p, events.Items, true), nil
+	a := buildAutopsy(ctx, cs, p, events.Items, true)
+	// The family is extra evidence. A failed or forbidden list leaves it nil
+	// and does not fail the summoning (Requirement 16.1).
+	if l, err := CollectLineage(ctx, cs, p); err == nil {
+		a.Lineage = l
+	}
+	return a, nil
 }
 
 // buildAutopsy converts a Pod and its Events into a PodAutopsy. CollectAutopsy and

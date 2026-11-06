@@ -22,6 +22,30 @@
     <button type="button" class="memory-keep" hx-post="{{$.PostmortemURL}}" hx-target="#postmortem" hx-swap="innerHTML">{{T "memory_keep"}}</button>
   </section>{{end}}
 
+  {{with .Lineage}}{{if .Show}}<section id="lineage-panel" class="lineage-panel{{with .Verdict}} lineage-{{.}}{{end}}" aria-label="{{T "lineage_title"}}">
+    <h2>{{T "lineage_title"}}</h2>
+    {{if .None}}<p class="lineage-none">{{T "lineage_none"}}</p>{{else}}
+    <p class="lineage-owner">{{Tf "lineage_owner" .Owner}}{{with .Via}}{{Tf "lineage_inferred" .}}{{end}}</p>
+    <p class="lineage-verdict" data-verdict="{{.Verdict}}">{{with .FamilyID}}<a class="ev-link" href="#ev-{{.}}">[{{.}}]</a> {{end}}{{.Text}}</p>
+    <p class="lineage-revision">{{.Revision}}</p>
+    <ul class="lineage-kin">
+      <li class="kin-dead"><span class="kin-name">{{.Self.Name}}</span> · {{T "lineage_self"}} · {{Tf "lineage_on_node" .Self.Node}}{{with .Self.State}} · <code>{{.}}</code>{{end}}</li>
+      {{range .Siblings}}<li class="{{if .Alive}}kin-alive{{else}}kin-dead{{end}}"><span class="kin-name">{{.Name}}</span> · {{if .Alive}}{{T "lineage_alive"}}{{else}}{{T "lineage_dead"}}{{end}} · {{Tf "lineage_on_node" .Node}}{{if not .Alive}}{{with .State}} · <code>{{.}}</code>{{end}}{{end}}</li>
+      {{end}}
+    </ul>
+    {{if not .Siblings}}<p class="lineage-note">{{T "lineage_no_siblings"}}</p>{{end}}
+    {{range .Versions}}<div class="lineage-version lineage-{{.Age}}{{if .Alive}} has-living{{end}}" data-revision="{{.Revision}}">
+      <h3>{{with .EvID}}<a class="ev-link" href="#ev-{{.}}">[{{.}}]</a> {{end}}{{.AgeLabel}} · <code>{{.Revision}}</code> · {{.Count}}</h3>
+      <ul class="lineage-kin">{{range .Pods}}<li class="{{if .Alive}}kin-alive{{else}}kin-dead{{end}}"><span class="kin-name">{{.Name}}</span> · {{if .Alive}}{{T "lineage_alive"}}{{else}}{{T "lineage_dead"}}{{end}} · {{Tf "lineage_on_node" .Node}}{{if not .Alive}}{{with .State}} · <code>{{.}}</code>{{end}}{{end}}</li>{{end}}</ul>
+      {{if .Diffs}}<div class="lineage-diff-wrap"><table class="lineage-diff">
+        <thead><tr><th scope="col">{{T "lineage_col_field"}}</th><th scope="col">{{T "lineage_col_other"}}</th><th scope="col">{{T "lineage_col_this"}}</th></tr></thead>
+        <tbody>{{range .Diffs}}<tr{{if .Hidden}} class="diff-hidden"{{end}}><th scope="row"><code>{{.Field}}</code></th><td><code>{{.From}}</code></td><td><code>{{.To}}</code></td></tr>
+        {{end}}</tbody>
+      </table></div>{{if .More}}<p class="lineage-note">+{{.More}}</p>{{end}}{{else}}<p class="lineage-note">{{T "lineage_no_diff"}}</p>{{end}}
+    </div>
+    {{end}}{{end}}
+  </section>{{end}}{{end}}
+
   <div class="seance-body">
     <div class="chat">
       <div id="log" class="log">{{range .Turns}}{{.}}{{end}}</div>

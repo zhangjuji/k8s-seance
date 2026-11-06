@@ -41,6 +41,7 @@ const (
 	RemedySlowProbe       = "slow-down-probe"
 	RemedyFixProbe        = "fix-probe-target"
 	RemedyGatherRecords   = "gather-records"
+	RemedyRollback        = "rollout-undo"
 )
 
 // DryRunFlag is appended to a write command to get its rehearsal.
@@ -146,6 +147,12 @@ func (c *caster) t(zh, en string) string {
 
 // plan picks the remedy from the cause and the evidence.
 func (c *caster) plan() {
+	// A release that broke a family whose former life still lives is rolled
+	// back first, whatever the cause (Requirement 16.5).
+	if v := c.a.Lineage.LivingFormerLife(); v != nil && c.sp.Target.InPlace {
+		c.rollback(v)
+		return
+	}
 	switch c.cls.Cause {
 	case autopsy.CauseOOMKilled:
 		c.oom()

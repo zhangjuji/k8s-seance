@@ -824,3 +824,33 @@ tr.memory-vanishing .memory-count,
   tr.memory-vanishing .memory-count { animation: none; }
   tbody tr.memory-fading { transition: none; }
 }
+
+/* Family and rebirths panel (Requirement 16) */
+.lineage-panel {
+  position: relative;
+  z-index: 1;
+  margin: 0.75rem 0 1rem;
+  padding: 0.6rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg-2);
+}
+.lineage-panel h2 { margin: 0 0 0.4rem; font-size: 1rem; color: var(--flame-soft); }
+.lineage-panel h3 { margin: 0.6rem 0 0.3rem; font-size: 0.95rem; font-weight: normal; }
+.lineage-panel p { margin: 0.3rem 0; }
+.lineage-panel.lineage-regression { border-color: var(--notice-line); }
+.lineage-panel.lineage-instance { border-color: var(--banner-line); }
+.lineage-verdict { color: var(--text); font-weight: bold; }
+.lineage-note, .lineage-none, .lineage-revision { color: var(--muted); font-size: 0.9em; }
+.lineage-kin { list-style: none; margin: 0.2rem 0; padding: 0; }
+.lineage-kin li { margin: 0.15rem 0; overflow-wrap: anywhere; }
+.lineage-kin li::before { content: "✝ "; color: var(--muted); }
+.lineage-kin li.kin-alive::before { content: "🕯 "; }
+.lineage-kin li.kin-alive { color: var(--advice); }
+.lineage-version { border-top: 1px dashed var(--line); margin-top: 0.5rem; }
+.lineage-version.has-living h3 { color: var(--advice); }
+.lineage-diff-wrap { overflow-x: auto; }
+.lineage-diff { border-collapse: collapse; width: 100%; font-size: 0.9em; }
+.lineage-diff th, .lineage-diff td { border: 1px solid var(--line); padding: 0.25rem 0.4rem; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+.lineage-diff thead th { color: var(--muted); font-weight: normal; }
+.lineage-diff tr.diff-hidden td { color: var(--banner-text); font-style: italic; }

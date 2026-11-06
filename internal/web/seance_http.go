@@ -85,6 +85,15 @@ type seanceDetail struct {
 	// the next restart overwrites, [] when none.
 	Memory       autopsy.Memory `json:"memory"`
 	RestartsSoon []string       `json:"restartsSoon"`
+	// Lineage is the family of the Pod with its verdict (Requirement 16), or
+	// absent when the Pod has no family record.
+	Lineage *lineageDetail `json:"lineage,omitempty"`
+}
+
+// lineageDetail is the family with its verdict.
+type lineageDetail struct {
+	*autopsy.Lineage
+	Verdict string `json:"verdict"`
 }
 
 type transcriptItem struct {
@@ -207,6 +216,10 @@ func (s *Server) handleGetSeance(w http.ResponseWriter, r *http.Request) {
 	if soon == nil {
 		soon = []string{}
 	}
+	var lineage *lineageDetail
+	if a.Lineage != nil {
+		lineage = &lineageDetail{Lineage: a.Lineage, Verdict: a.Lineage.Verdict()}
+	}
 	writeJSON(w, http.StatusOK, seanceDetail{
 		ID:              se.id,
 		Pod:             se.pod,
@@ -220,6 +233,7 @@ func (s *Server) handleGetSeance(w http.ResponseWriter, r *http.Request) {
 		Evidence:        evidence,
 		Memory:          autopsy.Remember(a, se.eventTTL, memoryAsOf(a, se.now())),
 		RestartsSoon:    soon,
+		Lineage:         lineage,
 	})
 }
 

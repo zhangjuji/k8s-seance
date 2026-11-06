@@ -63,6 +63,10 @@ type PodAutopsy struct {
 	Events      []EventRecord      `json:"events,omitempty"`
 	CollectedAt time.Time          `json:"collectedAt"`
 	Source      string             `json:"source"` // "cluster" | "fixture"
+	// Lineage is the family of the Pod (Requirement 16): siblings of the same
+	// revision and Pods of other revisions. Nil when the Pod has no controller
+	// family or the Pod list could not be read.
+	Lineage *Lineage `json:"lineage,omitempty"`
 }
 
 // Classification is the deterministic death-cause result.
@@ -75,7 +79,7 @@ type Classification struct {
 // Evidence is a numbered fact that the spirit must cite, for example "E3".
 type Evidence struct {
 	ID        string     `json:"id"`   // "E1"
-	Kind      string     `json:"kind"` // "status" | "event" | "log" | "spec"
+	Kind      string     `json:"kind"` // "status" | "event" | "lineage" | "log" | "spec"
 	Text      string     `json:"text"`
 	Timestamp *time.Time `json:"timestamp,omitempty"`
 }

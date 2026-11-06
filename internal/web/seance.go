@@ -580,7 +580,9 @@ type seancePage struct {
 	Turns       []template.HTML
 	Evidence    []evidenceCard
 	// Memory is the forgetting panel (Requirement 14).
-	Memory        memoryPanel
+	Memory memoryPanel
+	// Lineage is the family and rebirths panel (Requirement 16).
+	Lineage       lineagePanel
 	PostmortemURL string
 	// SpellURL is the resurrection spell panel (Requirement 13).
 	SpellURL string
@@ -633,6 +635,7 @@ func (se *seance) pageData(r *http.Request, ui string) seancePage {
 		Turns:         html,
 		Evidence:      cards,
 		Memory:        memory,
+		Lineage:       buildLineage(ui, se.sess.Autopsy, se.evidence),
 		PostmortemURL: seancePostmortemURL(se.id),
 		SpellURL:      seanceSpellURL(se.id),
 	}

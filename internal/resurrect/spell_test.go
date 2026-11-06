@@ -556,6 +556,8 @@ func synthetics() []synthetic {
 		{"probe-404", probePod(`Readiness probe failed: HTTP probe failed with statuscode: 404`), RemedyFixProbe, false},
 		{"probe-refused", probePod(`Liveness probe failed: Get "http://10.244.0.9:8080/healthz": dial tcp 10.244.0.9:8080: connect: connection refused`), RemedyFixProbe, false},
 		{"unknown", unknown, RemedyGatherRecords, false},
+		{"release-broke-it", brokenRelease(), RemedyRollback, true},
+		{"release-broke-it-statefulset", brokenStatefulSet(), RemedyRollback, true},
 	}
 }
 

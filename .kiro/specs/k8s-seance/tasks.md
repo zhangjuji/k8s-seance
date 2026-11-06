@@ -113,12 +113,12 @@
   - [x] 15.2 已供奉的亡灵在列表里不再变淡、不触发遗忘横幅
     - _Requirements: 15.2_
 
-- [ ] 16. 转世对比
-  - [ ] 16.1 `k8s.CollectLineage`：家族、同胞、其他版本、模板差异（脱敏）；判断；作为 `lineage` 证据
+- [x] 16. 转世对比
+  - [x] 16.1 `k8s.CollectLineage`：家族、同胞、其他版本、模板差异（脱敏）；判断；作为 `lineage` 证据
     - _Requirements: 16.1, 16.2, 16.3, 16.4_
-  - [ ] 16.2 降灵会「家族与转世」面板；mock 开场白提到活着的前世；复活咒语在发布改坏时先回滚
+  - [x] 16.2 降灵会「家族与转世」面板；mock 开场白提到活着的前世；复活咒语在发布改坏时先回滚
     - _Requirements: 16.4, 16.5_
-  - [ ] 16.3 `demo/second-life.yaml` 与 `kill-them-all.sh` 的第四种死法
+  - [x] 16.3 `demo/second-life.yaml` 与 `kill-them-all.sh` 的第四种死法
     - _Requirements: 16.6_
 
 - [ ] 17. 降灵板与整体视觉打磨
