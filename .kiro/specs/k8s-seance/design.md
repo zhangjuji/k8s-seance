@@ -377,3 +377,46 @@ JSON 持久化（fixtures 与墓地文件）使用结构体标签 `json:"..."`�
 - 提示词快照测试：在 replay 模式下跑 3 个 fixture，断言开场白含正确死因关键词和至少一个 `[E#]`，并与 golden 文件比对。
 - 集成冒烟：kind 集群 + `kill-them-all.sh`，脚本化检查 `/api/spirits` 返回 3 个且分类正确。
 - 手工验收：按 spec.md 第 7 节逐条打勾。
+
+### 性质测试（testing/quick，任务 20.2）
+
+性质测试用标准库 `testing/quick`，每个测试用固定种子（`rand.NewSource(seed)`）和固定用例数，失败时日志里有种子，重跑得到同样的输入。生成器只用固定词表（容器状态、reason、退出码、事件、日志行、密钥形状），判断条件按本节文字重新实现，不调用被测函数。文件：`internal/autopsy/property_test.go`、`internal/llm/property_test.go`、`internal/postmortem/property_test.go`。
+
+死因分类（`Classify`，Requirement 3）：
+
+- **P-C1**（种子 101，3000 例）对任意输入都返回 6 种死因之一，同一输入两次结果相同；`Classify(nil)` 为 Unknown。
+- **P-C2**（102，3000）规则顺序：任一容器 `state` 或 `lastState` 为 terminated 且 reason=OOMKilled，或有退出码 137 且有 reason+message 含 `oom`（不分大小写）的事件 → OOMKilled；否则有 waiting reason 为 ImagePullBackOff/ErrImagePull → ImagePullBackOff；否则有 waiting CrashLoopBackOff，或有容器重启过且有 reason=BackOff、message 以 `Back-off restarting failed container` 开头的事件 → CrashLoopBackOff；否则有 reason=Unhealthy 且 message 含 liveness/readiness/startup probe 的事件 → ProbeFailure；否则有非 0 退出码 → Error；否则 Unknown。
+- **P-C3**（103，3000）`Secondary` 为空或恰好是 `[ProbeFailure]`；只有主死因是前三种且有探针事件时才非空。
+- **P-C4**（104，3000）打乱容器顺序和事件顺序，`Cause` 和 `Secondary` 不变。
+- **P-C5**（105，3000）`LastExitCode` 为 nil 当且仅当没有非 0 的 terminated 退出码；否则等于按容器顺序、先 `state` 后 `lastState` 的第一个。
+- **P-C6**（106，3000）只有退出码 137、没有 OOMKilled reason 也没有 OOM 事件时，结果不是 OOMKilled。
+
+证据打包（`BuildEvidence`，Requirement 2.3、2.4）：
+
+- **P-E1**（201，1500）编号为 E1..En，没有空号；所有 `Text` 的字节数之和 ≤ `MaxChars`（≤0 时为 24000）。
+- **P-E2**（202，1000）截断只砍尾部：`MaxChars` 较小时的结果是较大时结果的前缀；种类顺序为 status/spec、event、lineage、log。
+- **P-E3**（203，1000）不截断时每个容器 1 条 status、2 条 spec，每个事件 1 条 event。
+- **P-E4**（204，3000）`collapseDuplicates` 后相邻两行不相等，每段连续相同的行只留一行，顺序不变，再做一次结果不变。
+- **P-E5**（205，3000）`selectLogLines(lines, n)` 至多 n 行；恰好是「去重后最后 n 行」中位于最后 5 行、或匹配 `error|panic|exception|killed|fatal`（不分大小写）的那些行，顺序不变。
+- **P-E6**（301，3000）`token=`、`TOKEN: `、`password = `、`passwd:`、`secret="…"`、`api_key='…'`、`apikey=…&`、`access_token=`、`Authorization: Bearer `、`bearer `、`token: Bearer `、`password: bearer ` 后面的随机值（以 `Zq9` 开头，再加 8–27 个 `[A-Za-z0-9-._~+/]` 字符）脱敏后不再出现（前 8 个字符也不出现），键名保留，并出现 `[REDACTED]`。
+- **P-E7**（302，2000）`AKIA` 加 16 个大写字母或数字的 AWS key 脱敏后不再出现。
+- **P-E8**（303，3000；304，800）`Redact` 幂等并保持 UTF-8 合法；不含密钥关键词、`bearer`、`AKIA` 的文本不变；在日志里注入密钥后，每条证据都是 `Redact` 的不动点，且不含注入的值。
+
+调用预算（`Budget`，Requirement 6.2、6.3）：
+
+- **P-B1..P-B5**（501，3000 个随机场景，每个最多 11 次调用；限额字段随机取值，含 ≤0 的默认值；内层 Provider 随机失败，报告的输入 token 可能大于估算）：
+  - B1 内层调用次数 ≤ `MaxCalls`，`Used()` 等于内层调用次数；在整场输入耗尽之前 `Used()+Remaining() == MaxCalls`，耗尽后 `Remaining() == 0`。
+  - B2 每次转发的估算（消息与证据的 rune 数 /2 向上取整）≤ `MaxInputTokens`；转发估算之和 ≤ `MaxTotalInputTokens`；`InputUsed()` 等于每次 max(估算, 报告值) 之和。
+  - B3 转发的 `MaxTokens` 在 [1, 上限] 内，上限是 `TurnIndex == 100` 时的 `MaxPostmortemOutputTokens`，否则 `MaxOutputTokens`；调用方给的值已在范围内时原样保留。
+  - B4 裁剪保留证据、所有 system 消息和最后一条 user 消息，顺序不变，先丢最早的消息（最后一条 user 之前保留的非 system 消息是原消息的后缀）。
+  - B5 `ErrInputTooLarge` 不计数；返回 `ErrBudgetExhausted` 之后，后续每次调用都返回它、只发出 `ExhaustedLineFor(lang)`，不再调用内层 Provider。测试还断言这些结果（耗尽、过大、转发、裁剪、钳制、复盘）都至少出现过一次。
+- **P-B6**（502，400）2–25 个 goroutine 同时调用时，内层调用次数仍 ≤ `MaxCalls`，转发估算之和仍 ≤ `MaxTotalInputTokens`。输入固定，goroutine 调度不固定。
+
+历史裁剪（`TrimHistory`，`truncate`）：
+
+- **P-H1**（401，5000）结果是输入的子序列，保留所有 system 消息；非 system 消息是输入非 system 消息的后缀。
+- **P-H2**（402，5000）结果中的 user 消息数为 min(max(rounds,0), 输入 user 数)；丢掉了轮次时，第一条非 system 消息是 user；user 数少于 rounds 时保留全部非 system 消息。
+- **P-H3**（403，5000）幂等，不修改输入，修改结果不影响输入。
+- **P-H4**（601，5000）`truncate(s, n)`：s 不超过 n 个 rune 时原样返回；否则返回 s 的前 n 个 rune 加 `…`，共 n+1 个 rune，UTF-8 合法。
+
+性质测试找到并修复的问题：P-E6 发现 `token: Bearer <值>` 只把 `Bearer` 一词换成 `[REDACTED]`，值本身留在证据里。原因是 key=value 规则先于 Bearer 规则运行。修复：`redact` 先运行 Bearer 规则（`internal/autopsy/evidence.go`），并在 `TestBuildEvidenceRedaction` 增加一行回归用例。
