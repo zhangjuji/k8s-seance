@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/zhangjuji/k8s-seance/internal/autopsy"
+	"github.com/zhangjuji/k8s-seance/internal/graveyard"
 	"github.com/zhangjuji/k8s-seance/internal/llm"
 )
 
@@ -67,6 +68,9 @@ type Options struct {
 	Model string
 	// Logger receives server-side errors. Nil means stderr.
 	Logger *log.Logger
+	// Graveyard stores a tombstone for each generated postmortem (Requirement 9).
+	// Nil turns the graveyard off.
+	Graveyard *graveyard.Store
 }
 
 // Server holds the routes and the parsed page templates.
@@ -75,9 +79,12 @@ type Server struct {
 	// pages renders the list page. seancePages renders the séance page and its turn fragments.
 	pages       *template.Template
 	seancePages *template.Template
-	mux         *http.ServeMux
-	seances     *seanceStore
-	cache       *llm.OpeningCache
+	// graveyardPages renders the graveyard grid, tombPages one tombstone.
+	graveyardPages *template.Template
+	tombPages      *template.Template
+	mux            *http.ServeMux
+	seances        *seanceStore
+	cache          *llm.OpeningCache
 }
 
 // New validates opts, parses the embedded templates and registers the routes.
@@ -107,17 +114,27 @@ func New(opts Options) (*Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("parse séance templates: %w", err)
 	}
+	graveyardPages, err := template.ParseFS(templateFS, "templates/layout.html", "templates/graveyard.html")
+	if err != nil {
+		return nil, fmt.Errorf("parse graveyard templates: %w", err)
+	}
+	tombPages, err := template.ParseFS(templateFS, "templates/layout.html", "templates/tombstone.html", "templates/postmortem.html")
+	if err != nil {
+		return nil, fmt.Errorf("parse tombstone templates: %w", err)
+	}
 	static, err := fs.Sub(staticFS, "static")
 	if err != nil {
 		return nil, fmt.Errorf("embed static files: %w", err)
 	}
 
 	s := &Server{
-		opts:        opts,
-		pages:       pages,
-		seancePages: seancePages,
-		seances:     newSeanceStore(),
-		cache:       &llm.OpeningCache{},
+		opts:           opts,
+		pages:          pages,
+		seancePages:    seancePages,
+		graveyardPages: graveyardPages,
+		tombPages:      tombPages,
+		seances:        newSeanceStore(),
+		cache:          &llm.OpeningCache{},
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", s.handleRoot)
@@ -129,6 +146,7 @@ func New(opts Options) (*Server, error) {
 		fmt.Fprintln(w, "ok")
 	})
 	s.registerSeanceRoutes(mux)
+	s.registerGraveyardRoutes(mux)
 	s.mux = mux
 	return s, nil
 }

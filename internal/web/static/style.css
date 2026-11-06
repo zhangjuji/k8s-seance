@@ -357,6 +357,44 @@ tbody tr:hover { background: rgba(255, 179, 71, 0.04); }
 }
 .finish { margin-top: 1rem; }
 
+/* Graveyard (task 8): a grid of tombstones, the most recent death first. */
+.graveyard-intro { color: var(--muted); }
+.tombs {
+  list-style: none;
+  margin: 1rem 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: 1rem;
+}
+.tomb-link,
+.tomb-single {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  text-align: center;
+  padding: 1.4rem 1rem 1rem;
+  background: linear-gradient(180deg, var(--bg-3), var(--bg-2));
+  border: 1px solid var(--line-strong);
+  border-radius: 45% 45% 0.4rem 0.4rem / 28% 28% 0.4rem 0.4rem;
+  color: var(--text);
+  text-decoration: none;
+  height: 100%;
+}
+.tomb-link:hover,
+.tomb-link:focus-visible {
+  border-color: var(--flame);
+  box-shadow: 0 0 0.9rem 0.2rem var(--glow);
+}
+.tomb-single { max-width: 34rem; margin: 0 auto 1.5rem; }
+.tomb-rip { color: var(--muted); letter-spacing: 0.2em; font-size: 0.8rem; }
+.tomb-name { font-weight: bold; word-break: break-all; font-size: 1rem; margin: 0; }
+.tomb-ns { color: var(--muted); font-size: 0.85rem; }
+.tomb-dates { display: flex; flex-direction: column; font-size: 0.8rem; color: var(--muted); }
+.tomb-epitaph { font-style: italic; color: var(--flame-soft); }
+.pm-tomb { margin-left: 0.75rem; }
+
 /* Keyframes. Only transform, opacity and shadows animate. */
 @keyframes candle-flicker {
   0%, 100% { opacity: 1; box-shadow: 0 0 0.7rem 0.25rem var(--glow); }

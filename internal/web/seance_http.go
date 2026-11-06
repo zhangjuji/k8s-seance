@@ -319,6 +319,9 @@ type postmortemReply struct {
 	Mode        string `json:"mode"`
 	Reason      string `json:"reason"`
 	DownloadURL string `json:"downloadUrl"`
+	// TombstoneURL is the graveyard page of the tombstone this postmortem was
+	// stored as. It is empty when the graveyard is off or the write failed.
+	TombstoneURL string `json:"tombstoneUrl,omitempty"`
 }
 
 // postmortemView is the data of templates/postmortem.html.
@@ -327,6 +330,8 @@ type postmortemView struct {
 	Mode        string
 	Reason      string
 	DownloadURL string
+	// TombstoneURL links to the tombstone page. Empty means no link.
+	TombstoneURL string
 }
 
 // handlePostmortem generates the postmortem again and stores it. JSON clients get
@@ -349,14 +354,15 @@ func (s *Server) handlePostmortem(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case wantsJSON(r):
 		writeJSON(w, http.StatusOK, postmortemReply{
-			Markdown:    doc.markdown,
-			Mode:        doc.mode,
-			Reason:      doc.reason,
-			DownloadURL: seanceDownloadURL(se.id),
+			Markdown:     doc.markdown,
+			Mode:         doc.mode,
+			Reason:       doc.reason,
+			DownloadURL:  seanceDownloadURL(se.id),
+			TombstoneURL: tombstoneURL(doc.tombID),
 		})
 	case r.Header.Get("HX-Request") != "":
 		var buf bytes.Buffer
-		v := postmortemView{Markdown: doc.markdown, Mode: doc.mode, Reason: doc.reason, DownloadURL: seanceDownloadURL(se.id)}
+		v := postmortemView{Markdown: doc.markdown, Mode: doc.mode, Reason: doc.reason, DownloadURL: seanceDownloadURL(se.id), TombstoneURL: tombstoneURL(doc.tombID)}
 		if err := s.seancePages.ExecuteTemplate(&buf, "postmortem", v); err != nil {
 			s.opts.Logger.Printf("render postmortem %s: %v", se.id, err)
 			http.Error(w, "render failed", http.StatusInternalServerError)

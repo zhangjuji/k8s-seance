@@ -63,10 +63,10 @@
     - _Requirements: 5.3_
   - [x] 7.4 暗色主题与烛光/雾气 CSS（`static/style.css`，手写）
 
-- [ ]* 8. 故障墓地（可选）
-  - [ ]* 8.1 `internal/graveyard/store.go` 与 `/api/graveyard`
+- [x]* 8. 故障墓地（可选）
+  - [x]* 8.1 `internal/graveyard/store.go` 与 `/api/graveyard`
     - _Requirements: 9.1_
-  - [ ]* 8.2 墓地页面：墓碑网格、点开看复盘
+  - [x]* 8.2 墓地页面：墓碑网格、点开看复盘
     - _Requirements: 9.2, 9.3_
 
 - [ ] 10. 英文演示路径

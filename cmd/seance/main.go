@@ -3,7 +3,7 @@
 //
 // Usage:
 //
-//	seance [-addr localhost:6660] [-n namespace] [-kubeconfig path] [-tail 200] [-fixtures] [-replay | -mock]
+//	seance [-addr localhost:6660] [-n namespace] [-kubeconfig path] [-tail 200] [-graveyard path] [-fixtures] [-replay | -mock]
 //	seance summon [-n namespace] [-kubeconfig path] [-pod name] [-tail 200] [-fixtures] [-replay | -mock]
 //
 // The command is read-only: it only lists and gets Pods, reads their logs and
@@ -17,6 +17,8 @@
 // With SEANCE_RECORD=1 and an HTTP provider, the replies are recorded to
 // fixtures/replay. Turns already recorded there are replayed without an API call,
 // so only missing turns reach the API.
+// Each generated postmortem also becomes a tombstone in the local graveyard file
+// (-graveyard, default ~/.k8s-seance/graveyard.json; an empty value turns it off).
 package main
 
 import (
@@ -30,12 +32,14 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
 
 	"github.com/zhangjuji/k8s-seance/fixtures"
 	"github.com/zhangjuji/k8s-seance/internal/autopsy"
+	"github.com/zhangjuji/k8s-seance/internal/graveyard"
 	"github.com/zhangjuji/k8s-seance/internal/k8s"
 	"github.com/zhangjuji/k8s-seance/internal/llm"
 	"github.com/zhangjuji/k8s-seance/internal/web"
@@ -74,8 +78,9 @@ func runServe(args []string) error {
 	useFixtures := fs.Bool("fixtures", false, "offline: show the recorded fixture spirits, no cluster access")
 	useReplay := fs.Bool("replay", false, "LLM replies from fixtures/replay (falls back to mock per turn)")
 	useMock := fs.Bool("mock", false, "LLM replies from the built-in template, no API calls")
+	graveyardPath := fs.String("graveyard", defaultGraveyardPath(), "tombstone file for generated postmortems (empty: graveyard off)")
 	fs.Usage = func() {
-		fmt.Fprintf(fs.Output(), "Usage: seance [-addr localhost:6660] [-n namespace] [-kubeconfig path] [-tail 200] [-fixtures] [-replay | -mock]\n       seance summon [flags]   print autopsies to stdout\n\n")
+		fmt.Fprintf(fs.Output(), "Usage: seance [-addr localhost:6660] [-n namespace] [-kubeconfig path] [-tail 200] [-graveyard path] [-fixtures] [-replay | -mock]\n       seance summon [flags]   print autopsies to stdout\n\n")
 		fs.PrintDefaults()
 	}
 	_ = fs.Parse(args) // ExitOnError: bad flags exit with status 2, -h with 0.
@@ -89,6 +94,7 @@ func runServe(args []string) error {
 	provider := buildProvider(mode, os.Stderr)
 	cluster, clusterErr := openCluster(*useFixtures, *kubeconfig, *tail, logger)
 	cfg, _ := llm.LoadConfig() // buildProvider already reported any config problem
+	grave := openGraveyard(*graveyardPath, logger)
 
 	srv, err := web.New(web.Options{
 		Cluster:          cluster,
@@ -99,11 +105,39 @@ func runServe(args []string) error {
 		Limits:           llm.LimitsFromEnv(),
 		Model:            cfg.Model,
 		Logger:           logger,
+		Graveyard:        grave,
 	})
 	if err != nil {
 		return err
 	}
 	return serveHTTP(*addr, srv.Handler(), logger)
+}
+
+// defaultGraveyardPath is ~/.k8s-seance/graveyard.json, or "" when the home
+// directory is unknown.
+func defaultGraveyardPath() string {
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return ""
+	}
+	return filepath.Join(home, ".k8s-seance", "graveyard.json")
+}
+
+// openGraveyard returns the store for path, or nil when path is empty.
+// The file is only created when the first tombstone is written.
+func openGraveyard(path string, logger *log.Logger) *graveyard.Store {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		logger.Printf("graveyard off: no tombstones will be written")
+		return nil
+	}
+	st, err := graveyard.Open(path)
+	if err != nil {
+		logger.Printf("warning: graveyard off: %v", err)
+		return nil
+	}
+	logger.Printf("graveyard: %s", st.Path())
+	return st
 }
 
 // openCluster returns the cluster source, or nil with the reason it is unavailable.

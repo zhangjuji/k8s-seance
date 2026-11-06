@@ -11,6 +11,7 @@ Status: in progress (Kiroween 2026, Frankenstein track).
 - **Spirit list.** Shows every Pod that restarted or ended abnormally, with a cause badge: `OOMKilled`, `CrashLoopBackOff`, `ImagePullBackOff`, `Error`, `ProbeFailure` or `Unknown`. The cause comes from deterministic rules, not from the LLM.
 - **Séance chat.** The ghost opens with a statement, then answers your questions as streamed text. Each answer cites evidence as `[E#]`. Click a citation to open the evidence card.
 - **Postmortem.** Markdown with a copy button and a `.md` download. The timeline, evidence and impact sections come from the collected data. The LLM writes only the summary, root cause, remediation and action items. If the LLM is unavailable or the call budget is spent, a rule-based template fills those sections instead.
+- **Graveyard.** Each generated postmortem also becomes a tombstone in a local JSON file: Pod name, namespace, birth and death times, cause, an epitaph (the postmortem's last words) and the postmortem itself. Generating the postmortem again for the same Pod replaces its tombstone. The **墓地** (graveyard) page at `/graveyard` shows the tombstones as a grid, most recent death first. Click one to read its postmortem or download it as `.md`. The JSON list is at `/api/graveyard`. The file defaults to `~/.k8s-seance/graveyard.json` (directory mode 0700, file mode 0600, because postmortems contain log lines). Use `-graveyard <path>` to move it, or `-graveyard ""` to turn the graveyard off. Fixture mode writes tombstones too.
 
 The web UI text is in Chinese. The recorded fixture spirits speak Chinese, and their postmortems are in English.
 
@@ -225,7 +226,7 @@ internal/
   spirit/            persona prompts (go:embed), séance session, chat
   postmortem/        Markdown postmortem generator and template
   llm/               Provider interface, HTTP client, mock, replay, recorder, budget, config
-  graveyard/         placeholder for the optional graveyard (not implemented yet)
+  graveyard/         local tombstone file (graveyard.json): one tombstone per Pod with its postmortem
   web/               net/http routes, SSE stream, html/template views, static assets
 fixtures/            embedded offline spirits (*.json) and fixtures/replay/ recorded replies
 demo/                kind config, three death manifests, kill-them-all.sh, read-only RBAC

@@ -127,10 +127,14 @@ const (
 
 // Result is a generated postmortem. Mode is ModeLLM or ModeTemplate. Reason is
 // empty for ModeLLM and one of the Reason values for ModeTemplate.
+//
+// LastWords is the quoted line of the "> Last words" row, as plain text without
+// Markdown escaping. The graveyard uses it as the epitaph.
 type Result struct {
-	Markdown string
-	Mode     string
-	Reason   string
+	Markdown  string
+	Mode      string
+	Reason    string
+	LastWords string
 }
 
 // view is the value the template is executed with.
@@ -173,9 +177,10 @@ func Generate(ctx context.Context, in Input, p llm.Provider) (Result, error) {
 	if t, ok := spirit.DeathTime(a); ok {
 		deathTime = stamp(t)
 	}
+	words := lastWords(in.Class.Cause, a.Name, in.Transcript)
 	v := view{
 		Title:       "Postmortem: " + a.Namespace + "/" + a.Name,
-		LastWords:   escapeMD(lastWords(in.Class.Cause, a.Name, in.Transcript)),
+		LastWords:   escapeMD(words),
 		Cause:       string(in.Class.Cause),
 		ExitCode:    exitCodeText(in.Class),
 		Restarts:    fmt.Sprint(restarts(a)),
@@ -207,6 +212,7 @@ func Generate(ctx context.Context, in Input, p llm.Provider) (Result, error) {
 		return Result{}, err
 	}
 	res.Markdown = md
+	res.LastWords = words
 	return res, nil
 }
 

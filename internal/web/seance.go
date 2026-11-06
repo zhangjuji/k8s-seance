@@ -110,6 +110,9 @@ type seance struct {
 	evIDs    map[string]bool
 	tmpl     *template.Template
 	logf     func(format string, args ...any)
+	// bury stores a tombstone for a new postmortem and returns its ID, or "" when
+	// none was stored. It is nil when the graveyard is off.
+	bury func(res postmortem.Result) string
 
 	// lastSeen is guarded by seanceStore.mu.
 	lastSeen time.Time
@@ -132,6 +135,8 @@ type postmortemDoc struct {
 	mode     string
 	reason   string
 	at       time.Time
+	// tombID is the graveyard tombstone written for this postmortem, or "".
+	tombID string
 }
 
 // postmortemFor returns the stored postmortem. It generates one when none exists
@@ -158,6 +163,9 @@ func (se *seance) postmortemFor(ctx context.Context, regen bool) (postmortemDoc,
 		return postmortemDoc{}, err
 	}
 	doc := postmortemDoc{markdown: res.Markdown, mode: res.Mode, reason: res.Reason, at: time.Now().UTC()}
+	if se.bury != nil {
+		doc.tombID = se.bury(res)
+	}
 	se.mu.Lock()
 	se.pm = &doc
 	se.mu.Unlock()
@@ -228,6 +236,9 @@ func (s *Server) newSeance(id, source string, a *autopsy.PodAutopsy, cls autopsy
 	}
 	for _, e := range ev {
 		se.evIDs[e.ID] = true
+	}
+	if s.opts.Graveyard != nil {
+		se.bury = func(res postmortem.Result) string { return s.buryTombstone(a, cls, res) }
 	}
 	se.sess = spirit.NewSession(id, a, cls, ev, s.opts.Provider, s.opts.Limits, s.cache, s.opts.Model)
 	return se
