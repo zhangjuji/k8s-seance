@@ -145,7 +145,7 @@
   - [x] 20.1 `.kiro/agents/seance-dev.json` 与 `.kiro/hooks/`：写文件后 gofmt、提交前 gofmt/vet/test、每轮结束检查；用有界的 `kiro-cli chat` 运行验证触发
   - [x] 20.2 `testing/quick` 性质测试：死因分类、证据截断/去重/脱敏、预算、历史裁剪（性质见 design.md「性质测试」）
     - _Requirements: 2.3, 2.4, 3, 6.2, 6.3_
-  - [ ] 20.3 `.kiro/settings/mcp.json`：本地只读的 gopls MCP，验证工具发现和一次调用
+  - [x] 20.3 `.kiro/settings/mcp.json`：本地只读的 gopls MCP，验证工具发现和一次调用
   - [ ] 20.4 `docs/how-we-used-kiro.md` 与 README「How we used Kiro」
 
 - [ ] 9. 验收与发布
