@@ -1,0 +1,25 @@
+{
+  "name": "seance-dev",
+  "description": "K8s Seance development agent with gofmt, vet and test hooks",
+  "prompt": "You work on K8s Seance, a Go repository. Follow .kiro/steering/ and .kiro/specs/k8s-seance/. Keep cluster writes inside internal/rite.",
+  "model": "claude-haiku-5.5",
+  "tools": ["*"],
+  "allowedTools": ["read", "grep", "glob", "code"],
+  "hooks": {
+    "agentSpawn": [
+      { "command": ".kiro/hooks/spawn-context.sh", "timeout_ms": 10000 }
+    ],
+    "userPromptSubmit": [
+      { "command": ".kiro/hooks/mark-turn-start.sh", "timeout_ms": 10000 }
+    ],
+    "postToolUse": [
+      { "matcher": "write", "command": ".kiro/hooks/gofmt-after-write.sh", "timeout_ms": 10000 }
+    ],
+    "preToolUse": [
+      { "matcher": "shell", "command": ".kiro/hooks/guard-commit.sh", "timeout_ms": 300000 }
+    ],
+    "stop": [
+      { "command": ".kiro/hooks/check-after-turn.sh", "timeout_ms": 300000 }
+    ]
+  }
+}
