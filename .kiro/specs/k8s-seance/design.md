@@ -156,6 +156,79 @@ func GeneratePostmortem(ctx context.Context, a *autopsy.PodAutopsy, cls autopsy.
 
 `~/.k8s-seance/graveyard.json`，追加写 `Tombstone` 列表。写入前整文件读取、合并、写临时文件后原子替换，避免半截文件。
 
+- 每个 Pod（namespace + name + UID）最多一块墓碑，ID 是这三者哈希的前 12 位十六进制。同一个 Pod 再次生成复盘时替换原墓碑（复盘、墓志铭、立碑时间），不新增。
+- 墓志铭取复盘里的 `Last words`（`postmortem.Result.LastWords`），不额外调用 LLM。
+- 生卒时间：Pod 的 `CreatedAt` 与 `spirit.DeathTime`。
+- 文件读不出或解析失败时不覆盖，返回错误；Web 层只记日志，复盘照常返回。目录 0700、文件 0600（复盘里有日志行）。
+- 位置由 `-graveyard` 参数决定，默认 `~/.k8s-seance/graveyard.json`；传空字符串关闭墓地。`--fixtures` 模式也会立碑。
+
+### 语言（Requirement 10）
+
+- 降灵会语言在召唤时确定（表单 `lang` 字段或请求的界面语言），之后不变；界面语言按请求决定（`?lang=` > cookie `seance_lang` > `-lang` > `Accept-Language`）。
+- `llm.ChatRequest.Lang` 把语言传到 provider：mock 开场白、预算耗尽台词跟随它。follow-up 仍然跟随用户提问的语言。
+- 英文降灵会的回放 key 是 `<pod>-en`，文件 `fixtures/replay/<pod>-en.json`；录制（`SEANCE_RECORD=1`）自动写到这个文件。
+- 文案集中在 `internal/web/i18n.go` 的 `catalog`，模板里用 `{{T "key"}}` / `{{Tf "key" args}}`；每种语言单独解析一套模板。复盘正文本来就是英文，不翻译。
+
+### spirit/factcheck.go（Requirement 11）
+
+- `FactCheck(reply, evidence, known...) []Finding`，纯函数，无 LLM 调用。
+- 证据侧：`exitCode=N`、`restarts: N`、`(count N)`、内存数量、证据时间戳和死亡时间（精确到分钟）。
+- 回答侧：按句切分；含建议词的句子不核对数量（建议可以提出新数值）。`64M` 与 `64Mi` 视为不同。
+- 只报告矛盾，不判断名字、路径和叙述，所以「没有发现」不等于「已验证」。
+
+### 招魂铃（Requirement 12）
+
+- `k8s.WatchPods` 只用 `Pods(ns).Watch`（RBAC 已有 watch），事件只当作「可能变了」的信号，合并后通过 channel 发出；watch 被服务端关闭时退避重连（1s 起，最多 30s），重连后补发一次信号。
+- `GET /api/spirits/stream?ns=` 是 SSE：`ready` → 每次变化去抖 700ms 后复用 `Source.List`，发 `rows`（新的 tbody HTML、`arrived`、`worse`、`mass`）；list 失败发 `trouble`，流不断。第一次 list 是基线，打开页面前已死的不提示。
+- 集体墓葬：每条流记住 60 秒内的 arrived/worse，同一死因 ≥2 个不同 Pod 时上报，组变大时再报一次。提示文案按死因给出优先排查方向。
+- 只有实现了 `Watcher` 的 Source（集群）有实时流；fixtures 没有。列表页在实时模式下命名空间切换改为整页跳转，避免旧流残留。
+
+### resurrect/spell.go（Requirement 13）
+
+- `Cast(autopsy, class, evidence, lang) Spell`：纯函数。`Spell` 有 Incantation（咒语，好玩的部分）、Diagnosis（带 [E#]）、Target、Steps（check / file / cast / verify）、Caveats、Patch。
+- 补丁是 strategic merge patch，按容器名合并，只写要改的字段；Deployment 等控制器走 `spec.template.spec`，裸 Pod 走 `spec`。
+- 证据给不出的值用 `${NAME:?提示}`，shell 在变量未设置时中止，复制粘贴不看也不会误操作。
+- 路由：`GET /api/seances/:id/spell`（htmx 片段或 JSON），`GET /api/seances/:id/spell.yaml`（补丁下载）。不占降灵会的 LLM 调用额度。
+
+### 遗忘倒计时（Requirement 14）
+
+- Kubernetes 在事件最后一次更新后 TTL（默认 1h）删除它。`autopsy.Remember(a, ttl, asOf)` 返回最先过期的 Warning 事件（FadesAt、Reason、Message）、最后一条事件的过期时间、以及从 asOf 起算的剩余秒数。
+- asOf：集群用当前时间，fixtures 用 `collectedAt`（录制时刻），否则录好的亡灵永远是「已遗忘」。
+- 服务端渲染初始剩余秒数 `data-memory-left`，`static/memory.js` 每 10 秒在浏览器里减少并切换 `memory-fading`（<15m）/`memory-vanishing`（<5m）/`memory-gone`；不需要轮询服务器。
+- 降灵会页的关键记忆用时间戳和 Reason 对应到证据编号。
+
+### 祭坛（Requirement 15）
+
+- 视觉借用亡灵节的民俗元素（papel picado、ofrenda、cempasúchil 万寿菊、蜡烛），不使用电影里的角色、歌曲、名称或画风。
+- `altarTiers` 把墓碑（最近死亡在前）切成 3、4、5、5… 个一层；模板逐层渲染，每层下面一块带万寿菊花边的祭台和两支蜡烛。
+- 列表页读取祭坛上的 namespace/pod，命中的行标 `memory-enshrined`、`data-enshrined`：服务端和 `memory.js` 都跳过淡出和横幅。
+
+### 转世对比（Requirement 16）
+
+- `CollectAutopsy` 拿到 Pod 后调用 `CollectLineage`：一次 `Pods(ns).List`（RBAC 已有），用 ownerReference + 版本标签归族。ReplicaSet 名去掉 `-<pod-template-hash>` 得到 Deployment 名；StatefulSet/DaemonSet 用 `controller-revision-hash`。列表失败或被禁止时 Lineage 为空，不影响召唤。
+- `diffSpecs(from, to)` 只比较排障相关字段，环境变量值脱敏（`autopsy.Redact` + 密钥名规则），原值比较以发现「隐藏的值变了」。
+- `Lineage.Verdict()`：instance（有活着的同胞）> regression（其他版本有活的）> family（都死了）。
+- 证据：第一条是家族与判断，之后每个版本一条（存活、差异，最多 8 项）。放在事件之后、日志之前。
+
+### 降灵板（Requirement 17）
+
+- 符文位置由服务端算好（`placeRunes`：≤10 个一条弧，更多分两条弧），写成百分比 `left/top`；不需要画布或图片。
+- 乩板逻辑在 `seance.html` 的脚本里：读取 `sse:delta` 累积文本里的 `[E#]`，排队移动（每步 750ms）；`sse:turn` 的 `doubts` 决定「是 / 否」；`#postmortem` 换入后移到「再会」。
+- `markdownLite` 在 HTML 转义之后把 `**x**`、`` `x` `` 换成 `<strong>`、`<code>`，捕获内容仍是转义文本。
+
+### 供品与归来（Requirement 18）
+
+- 亡灵节的祭坛上摆着亡者的东西；这里摆的是这次死亡最关键、已被复盘保存的证据（`graveyard.OfferingsFor`）。
+- 亡者会回来探望：`web.visitAltar` 在列表页和招魂铃每次刷新时，用 `graveyard.Match`（先按 Pod 名，再按命名空间 + 家族）把亡灵对上祭坛；死亡时间晚于立碑时间就调用 `Store.Return` 记一次归来（同一 Pod 按新的死亡时间去重，家族成员按 Pod 名去重）。只写本地祭坛文件。
+- 家族：集群列表用 pod-template-hash / controller-revision-hash 标签算准确的家族；没有标签的数据（fixtures、墓碑）用 `autopsy.FamilyOf` 从 owner 名推断。
+
+### 施法（Requirement 19）
+
+- `resurrect.Spell.Action` 是咒语的机器可执行版本：`patch`（strategic merge）、`set-image`、`rollback`（把 Deployment 的 `spec.template` 用 JSON Patch 替换成活着那一版 ReplicaSet 的模板，相当于 `kubectl rollout undo --to-revision`）、`configmap-mount`（建/更新 ConfigMap 再 patch 挂载）。证据给不出的值（tag、配置内容）由用户输入。
+- `internal/rite.Caster` 执行 Action，所有写请求可带 `DryRun: All`；`FieldManager: k8s-seance`。
+- `k8s.Vitals(ns, pod, family, since, 20s)`：一次 Pods List。施法前就存在的坏 Pod 在被替换前不算失败，只让状态停在 waiting；施法后新建的 Pod 失败才算 dying。
+- 网页：`POST /api/seances/:id/cast`（mode=dry|cast），`GET /api/seances/:id/vitals?since=`；结果片段每 3 秒轮询一次，最多 4 分钟。
+
 ### internal/web/server.go、templates/、static/
 
 - `net/http` 提供路由和 SSE 端点；页面用 `html/template` 渲染，交互用 htmx（单个 js 文件，`go:embed` 打包）。
@@ -176,13 +249,21 @@ func GeneratePostmortem(ctx context.Context, a *autopsy.PodAutopsy, cls autopsy.
 | GET | `/api/seances/:id/stream` | SSE（开场白与回答） |
 | POST | `/api/seances/:id/messages` | 追问 |
 | POST | `/api/seances/:id/postmortem` | 生成复盘 |
-| GET | `/api/graveyard` | 墓碑列表（可选） |
+| GET | `/api/seances/:id/spell` | 复活咒语（HTML 片段或 JSON） |
+| GET | `/api/seances/:id/spell.yaml` | 下载咒语里的补丁 |
+| POST | `/api/seances/:id/cast` | 施法或试咒（需要 `--allow-resurrect`） |
+| GET | `/api/seances/:id/vitals?since=` | 施法后是否复活 |
+| GET | `/api/spirits/stream?ns=` | 招魂铃 SSE：ready / rows / trouble |
+| GET | `/api/graveyard` | 墓碑列表，按死亡时间倒序（可选） |
+| GET | `/graveyard` | 墓地页面：墓碑网格（可选） |
+| GET | `/graveyard/:id` | 单块墓碑与它的复盘（可选） |
+| GET | `/graveyard/:id/postmortem.md` | 下载墓碑里的复盘（可选） |
 
 ### demo/
 
 - `kind-config.yaml`：单节点。
-- `oom.yaml`：`memory-glutton`，`polinux/stress`（或同类公开镜像），limits.memory=64Mi，申请 256M。
-- `crashloop.yaml`：`restless-spirit`，`busybox`，`command: ["sh","-c","echo 'FATAL: config /etc/app/config.yaml not found'; exit 1"]`。
+- `oom.yaml`：`memory-glutton`，`python:3.12-alpine`（多架构，ARM 也能跑；原来的 `polinux/stress` 只有 amd64），limits.memory=64Mi，用 `HOG_BYTES` 申请 100MB（约 95Mi，加解释器约 10Mi）：64Mi 下必死，复活咒语翻倍到 128Mi 后能真的复活（有测试守护）。录好的 fixtures 仍是当初 `polinux/stress` 的记录。
+- `crashloop.yaml`：`restless-spirit`，`busybox`，启动时检查 `/etc/app/config.yaml`：不存在就打印 `FATAL: config /etc/app/config.yaml not found` 并 `exit 1`；存在就常驻（这样复活咒语挂上 ConfigMap 后它真的能复活）。
 - `imagepull.yaml`：`lost-soul`，`image: nginx:does-not-exist-666`。
 - （可选）`probe.yaml`：liveness 指向不存在的路径。
 - `kill-them-all.sh`：建 `seance-demo` 命名空间、apply、等待状态；`--cleanup` 只删该命名空间。
