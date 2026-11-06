@@ -1,4 +1,8 @@
-# Dies of OOMKilled: the process allocates 256M while the container limit is 64Mi.
+# Dies of OOMKilled: the process holds HOG_BYTES (100 MB, about 95Mi) while the
+# container limit is 64Mi. The resurrection spell doubles the limit to 128Mi,
+# which fits the 95Mi plus about 10Mi for the interpreter, so the Pod really
+# comes back (guarded by internal/resurrect tests). python:3.12-alpine is
+# multi-arch, so this also dies on ARM machines.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -20,10 +24,21 @@ spec:
     spec:
       containers:
         - name: stress
-          # polinux/stress has no entrypoint, so the command must name the binary explicitly.
-          image: polinux/stress:1.0.4
-          command: ["stress"]
-          args: ["--vm", "1", "--vm-bytes", "256M", "--vm-hang", "1"]
+          image: python:3.12-alpine
+          env:
+            - name: HOG_BYTES
+              value: "100000000"
+          command:
+            - python3
+            - -c
+            - |
+              import os, time
+              n = int(os.environ["HOG_BYTES"])
+              print("memory-glutton: hogging", n, "bytes", flush=True)
+              hog = b"x" * n
+              print("memory-glutton: holding", len(hog), "bytes", flush=True)
+              while True:
+                  time.sleep(3600)
           resources:
             requests:
               memory: "32Mi"

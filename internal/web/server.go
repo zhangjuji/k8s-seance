@@ -107,7 +107,7 @@ func parsePageSet(lang string) (*pageSet, error) {
 	if ps.list, err = parse("templates/layout.html", "templates/spirits.html"); err != nil {
 		return nil, fmt.Errorf("parse %s templates: %w", lang, err)
 	}
-	if ps.seance, err = parse("templates/layout.html", "templates/seance.html", "templates/turn.html", "templates/postmortem.html"); err != nil {
+	if ps.seance, err = parse("templates/layout.html", "templates/seance.html", "templates/turn.html", "templates/postmortem.html", "templates/spell.html"); err != nil {
 		return nil, fmt.Errorf("parse %s séance templates: %w", lang, err)
 	}
 	if ps.graveyard, err = parse("templates/layout.html", "templates/graveyard.html"); err != nil {
@@ -192,6 +192,7 @@ func New(opts Options) (*Server, error) {
 		fmt.Fprintln(w, "ok")
 	})
 	s.registerSeanceRoutes(mux)
+	s.registerSpellRoutes(mux)
 	s.registerGraveyardRoutes(mux)
 	s.mux = mux
 	return s, nil

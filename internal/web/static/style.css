@@ -542,3 +542,49 @@ tbody tr.fresh { animation: row-flicker 1.2s ease-in-out 3; background: rgba(255
     scroll-behavior: auto !important;
   }
 }
+
+/* Resurrection spell (task 13): read-only plan, every write labelled. */
+.spell-button { margin-top: 1rem; }
+.spell-panel { margin-top: 0.75rem; }
+.spell {
+  border: 1px solid var(--line-strong);
+  background: var(--bg-2);
+  border-radius: 0.4rem;
+  padding: 0.75rem;
+}
+.spell h3 { font-size: 1rem; margin: 1rem 0 0.4rem; }
+.spell-incantation { font-style: italic; color: var(--flame-soft); margin: 0 0 0.5rem; }
+.spell-note,
+.spell-target-note { color: var(--muted); font-size: 0.9rem; }
+.spell-inferred {
+  font-size: 0.8rem;
+  border: 1px dashed var(--line-strong);
+  border-radius: 0.3rem;
+  padding: 0 0.3rem;
+}
+.spell-steps { padding-left: 1.4rem; }
+.spell-step { margin-bottom: 0.75rem; }
+.spell-kind {
+  display: inline-block;
+  font-size: 0.78rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 0.3rem;
+  background: var(--badge-default);
+  color: var(--text);
+}
+.spell-kind-cast { background: var(--notice-bg); border: 1px solid var(--notice-line); color: var(--notice-text); }
+.spell-kind-file { background: var(--banner-bg); border: 1px solid var(--banner-line); color: var(--banner-text); }
+.spell-cmd { display: flex; gap: 0.4rem; align-items: flex-start; margin-top: 0.35rem; }
+.spell-cmd pre {
+  flex: 1;
+  margin: 0;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: var(--code-bg);
+  color: var(--text);
+  padding: 0.5rem;
+  border-radius: 0.3rem;
+  font-size: 0.82rem;
+}
+.spell-copy { flex: none; }

@@ -25,6 +25,9 @@
         <button type="submit"{{if .Exhausted}} disabled{{end}}>{{T "ask_button"}}</button>
       </form>
 
+      <button type="button" class="spell-button" hx-get="{{.SpellURL}}" hx-target="#spell" hx-swap="innerHTML">{{T "spell_button"}}</button>
+      <div id="spell" class="spell-panel"></div>
+
       <button type="button" class="finish" hx-post="{{.PostmortemURL}}" hx-target="#postmortem" hx-swap="innerHTML">{{T "finish"}}</button>
       <div id="postmortem" class="postmortem-panel"></div>
     </div>

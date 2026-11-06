@@ -1,4 +1,7 @@
-# Dies in a CrashLoopBackOff: the app exits 1 right after printing a missing-config error.
+# Dies in a CrashLoopBackOff: at start the app checks /etc/app/config.yaml. When
+# the file is missing it prints a FATAL line and exits 1. When the file exists it
+# stays up, so the resurrection spell (a ConfigMap mounted with subPath) really
+# brings it back.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -24,7 +27,14 @@ spec:
           command:
             - sh
             - -c
-            - "echo starting restless-spirit; echo FATAL: config /etc/app/config.yaml not found; exit 1"
+            - |
+              echo starting restless-spirit
+              if [ ! -f /etc/app/config.yaml ]; then
+                echo FATAL: config /etc/app/config.yaml not found
+                exit 1
+              fi
+              echo config /etc/app/config.yaml found, resting in peace
+              while true; do sleep 3600; done
           resources:
             requests:
               memory: "16Mi"

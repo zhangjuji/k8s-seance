@@ -93,12 +93,12 @@
   - [x] 12.3 列表页：实时状态、提示条 + 立刻召唤、集体墓葬卡片、合成铃声开关、烛火闪动
     - _Requirements: 12.2, 12.3, 12.4, 12.5, 12.6_
 
-- [ ] 13. 复活咒语
-  - [ ] 13.1 `internal/resurrect`：按死因生成咒语（OOM、缺文件、依赖不通、其他崩溃、镜像 tag/权限/网络、探针、未知），施咒对象推断，`${VAR:?}` 占位，dry-run 在前
+- [x] 13. 复活咒语
+  - [x] 13.1 `internal/resurrect`：按死因生成咒语（OOM、缺文件、依赖不通、其他崩溃、镜像 tag/权限/网络、探针、未知），施咒对象推断，`${VAR:?}` 占位，dry-run 在前
     - _Requirements: 13.1, 13.2, 13.3, 13.4, 13.5_
-  - [ ] 13.2 测试：补丁用 strategic merge 应用到 `demo/oom.yaml`、`demo/crashloop.yaml` 后结果正确；每条写操作前有 dry-run；不编 tag；英文无中文
+  - [x] 13.2 测试：补丁用 strategic merge 应用到 `demo/oom.yaml`、`demo/crashloop.yaml` 后结果正确；每条写操作前有 dry-run；不编 tag；英文无中文
     - _Requirements: 13.2, 13.3, 13.6_
-  - [ ] 13.3 降灵会页「念出复活咒语」面板、复制按钮、补丁下载；`demo/crashloop.yaml` 改为真的检查配置文件，挂上后能复活
+  - [x] 13.3 降灵会页「念出复活咒语」面板、复制按钮、补丁下载；`demo/crashloop.yaml` 改为真的检查配置文件，挂上后能复活
     - _Requirements: 13.1, 13.6_
 
 - [ ] 14. 遗忘倒计时

@@ -1,0 +1,42 @@
+{{define "spell"}}<section class="spell" id="spell-panel" aria-label="{{T "spell_aria"}}">
+  <p class="spell-incantation">{{.Incantation}}</p>
+  <p class="spell-note">{{T "spell_note"}}</p>
+
+  <h3>{{T "spell_diagnosis"}}</h3>
+  <ul class="spell-diagnosis">{{range .Diagnosis}}<li>{{.}}</li>{{end}}</ul>
+
+  <h3>{{T "spell_target"}}</h3>
+  <p class="spell-target"><code>{{.Target.Kind}}/{{.Target.Name}}</code> · {{T "spell_ns"}} <code>{{.Target.Namespace}}</code>{{with .Target.Container}} · {{T "spell_container"}} <code>{{.}}</code>{{end}}{{if .Target.Inferred}} <span class="spell-inferred">{{T "spell_inferred"}}</span>{{end}}</p>
+  {{with .Target.Note}}<p class="spell-target-note">{{.}}</p>{{end}}
+
+  <h3>{{T "spell_steps"}}</h3>
+  <ol class="spell-steps">{{range .Steps}}
+    <li class="spell-step spell-step-{{.Kind}}" data-kind="{{.Kind}}">
+      <span class="spell-kind spell-kind-{{.Kind}}">{{.Label}}</span> <span class="spell-step-title">{{.Title}}</span>
+      {{range .Commands}}<div class="spell-cmd"><pre>{{.}}</pre><button type="button" class="spell-copy">{{T "spell_copy"}}</button></div>
+      {{end}}
+    </li>{{end}}
+  </ol>
+
+  {{if .Patch}}<h3>{{T "spell_patch"}}</h3>
+  <div class="spell-cmd spell-patch"><pre>{{.Patch}}</pre><button type="button" class="spell-copy">{{T "spell_copy"}}</button></div>
+  <p><a class="spell-download" href="{{.PatchURL}}" download="{{.PatchFile}}">{{Tf "spell_download" .PatchFile}}</a></p>{{end}}
+
+  <h3>{{T "spell_caveats"}}</h3>
+  <ul class="spell-caveats">{{range .Caveats}}<li>{{.}}</li>{{end}}</ul>
+  <script>
+  (function () {
+    var root = document.getElementById('spell-panel');
+    root.addEventListener('click', function (e) {
+      var btn = e.target.closest ? e.target.closest('button.spell-copy') : null;
+      if (!btn) { return; }
+      var text = btn.parentNode.querySelector('pre').textContent;
+      navigator.clipboard.writeText(text).then(function () {
+        btn.textContent = {{T "spell_copied"}};
+      }, function () {
+        btn.textContent = {{T "spell_copy_failed"}};
+      });
+    });
+  })();
+  </script>
+</section>{{end}}

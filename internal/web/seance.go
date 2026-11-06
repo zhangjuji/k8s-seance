@@ -575,6 +575,8 @@ type seancePage struct {
 	Turns         []template.HTML
 	Evidence      []autopsy.Evidence
 	PostmortemURL string
+	// SpellURL is the resurrection spell panel (Requirement 13).
+	SpellURL string
 }
 
 // quickQuestion is one one-click question. Vals is the hx-vals JSON.
@@ -623,6 +625,7 @@ func (se *seance) pageData(r *http.Request, ui string) seancePage {
 		Turns:         html,
 		Evidence:      se.evidence,
 		PostmortemURL: seancePostmortemURL(se.id),
+		SpellURL:      seanceSpellURL(se.id),
 	}
 	if se.lang != ui {
 		p.LangNotice = trf(ui, "lang_mismatch", tr(ui, "lang_name_"+se.lang))
