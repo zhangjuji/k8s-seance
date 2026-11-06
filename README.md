@@ -231,26 +231,13 @@ Warnings:
 
 ## How we used Kiro
 
-The repository was built with Kiro as a spec-driven project. Everything below comes from files in `.kiro/` and from the git history.
+The project is spec-driven: `.kiro/specs/k8s-seance/` holds the requirements, the design and the task plan, and `.kiro/steering/` holds the product, stack and layout rules. Most commit subjects name the task they implement. [docs/how-we-used-kiro.md](docs/how-we-used-kiro.md) has the details and the evidence.
 
-- **Specs** in `.kiro/specs/k8s-seance/`:
-  - `requirements.md` has 9 numbered requirements with acceptance criteria. Requirement 9 (the graveyard) is marked optional.
-  - `design.md` covers the architecture, the component interfaces, the data models, error handling and the testing strategy.
-  - `tasks.md` is the implementation plan: 9 top-level tasks with 27 subtasks, plus optional task 8.
-- **Steering** in `.kiro/steering/`:
-  - `product.md`: the product in one line, its principles (read-only, low cost, usable offline) and what it does not do.
-  - `tech.md`: the stack and its limits (Go, `net/http`, htmx, client-go, one YAML library) and the coding tool and model used (Kiro CLI with claude-haiku-5.5).
-  - `structure.md`: the directory layout and conventions, such as the collector emitting one `PodAutopsy` type and new features being specified before they are coded.
-- **Tasks to commits.** Most commit subjects name the task they implement, for example:
-  - `c8d6a29 docs: add K8s Seance spec, Kiro specs and steering` (the specs themselves)
-  - `f41809b chore: scaffold Go module, directory layout, MIT LICENSE and README (task 1.1)`
-  - `2e9cb5d feat(llm): per-seance budget, opening cache, history trim (4.3)`
-  - `181ab36 feat(llm): replay matches follow-ups by normalised question; opening/postmortem by index`
-  - `e1b9855 feat(web): postmortem panel with copy and .md download (7.3)`
-  - `6eecc2b chore(tasks): 4.5 real-LLM recordings done`
-
-  The history has 35 commits, all dated 2026-11-01.
-- **Progress** is tracked with checkboxes in `tasks.md`: 38 checkboxes, 28 checked and 10 open. The open ones are task 1 and subtask 1.1 (its child item, the Devpost identity verification, is also open), task 4 (its header is still open even though all of 4.1 to 4.5 are checked), task 8 and its subtasks 8.1 and 8.2 (optional), and task 9 with subtasks 9.1 and 9.2.
+- **History.** Tasks 1–7, 9.1 and 9.2 are the original base (37 commits dated 2026-11-01). Tasks 8, 10–19 and 9.3 were rebuilt independently from the spec on 2026-11-06, one Kiro CLI session and one commit per task. Task 20 added the Kiro tooling below and no product feature. Not every line in the repository is claimed to be Kiro-written.
+- **Model.** The steering names Kiro CLI with `claude-haiku-5.5`. The task 20 session ran `claude-opus-5.5`, and its nested test runs used `claude-haiku-5.5`.
+- **Hooks.** Kiro CLI 2.37.0 reads hooks from agent configs, so `.kiro/agents/seance-dev.json` registers the scripts in `.kiro/hooks/`: context at `agentSpawn`, `gofmt -l` after each Kiro write, `gofmt`/`go vet`/`go test` before any `git commit` Kiro runs (a failure blocks the commit), and the same checks at the end of each turn that changed Go files. Kiro CLI has no save or pre-commit trigger, so these replace them for Kiro's own actions only. Bounded `kiro-cli chat` runs showed every trigger firing, with `agentSpawn` only in interactive sessions. Run `kiro-cli chat --agent seance-dev` from the repository root.
+- **Property tests.** `testing/quick` with fixed seeds covers the classifier, evidence truncation, duplicate collapsing and redaction, the budget (including concurrent callers) and history clipping. The properties are written in `design.md`. They found a redaction bug: in `token: Bearer <value>` the value was left visible (fixed in `c81fff8`).
+- **MCP.** `.kiro/settings/mcp.json` runs the local `gopls mcp` server with only its read-only tools enabled. Kiro discovered its tools and called `go_package_api` and `go_symbol_references`. It needs `gopls` on `PATH` (`go install golang.org/x/tools/gopls@v0.24.0`).
 
 ## Project layout
 
@@ -268,8 +255,8 @@ internal/
   web/               net/http routes, SSE stream, html/template views, static assets
 fixtures/            embedded offline spirits (*.json) and fixtures/replay/ recorded replies
 demo/                kind config, four death manifests, kill-them-all.sh, read-only and casting RBAC
-docs/                notes and screenshots (placeholder)
-.kiro/               specs and steering
+docs/                acceptance notes and how-we-used-kiro.md
+.kiro/               specs, steering, the seance-dev agent, hooks and MCP settings
 ```
 
 Tests run with `go test ./...`.
