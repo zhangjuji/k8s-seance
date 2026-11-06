@@ -154,6 +154,7 @@ func summarizeAutopsy(a *autopsy.PodAutopsy) autopsy.SpiritSummary {
 		Namespace: a.Namespace,
 		Name:      a.Name,
 		Cause:     autopsy.Classify(a).Cause,
+		Family:    autopsy.FamilyOf(a),
 	}
 	var latest *time.Time
 	for _, ct := range a.Containers {

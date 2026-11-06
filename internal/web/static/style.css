@@ -604,6 +604,43 @@ tbody tr.memory-enshrined { opacity: 1; }
 .memory-enshrined-link:hover { text-decoration: underline; }
 tr.memory-enshrined .memory-count { margin-left: 0.4rem; }
 
+/* Offerings and returns (Requirement 18). Each return lights one small candle
+   in front of the photo, at most seven. */
+.photo-offerings { display: flex; flex-direction: column; gap: 0.15rem; max-width: 100%; font-size: 0.75rem; }
+.photo-offering { display: block; max-width: 14rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+.photo-offering .offering-label { color: var(--marigold); }
+.return-candles { display: flex; gap: 0.35rem; justify-content: center; padding-top: 1rem; }
+.return-candle {
+  position: relative;
+  display: inline-block;
+  width: 0.4rem;
+  height: 1rem;
+  border-radius: 0.1rem;
+  background: linear-gradient(90deg, #d9c9a6, #fff6e0 45%, #d9c9a6);
+}
+.return-candle .altar-flame { width: 0.35rem; height: 0.6rem; margin-left: -0.175rem; }
+.return-candle:nth-child(odd) .altar-flame { animation-delay: -0.9s; }
+.return-mark { color: var(--flame-soft); white-space: nowrap; text-decoration: none; font-size: 0.85rem; }
+.return-mark:hover { text-decoration: underline; }
+.photo-family { color: var(--muted); font-size: 0.8rem; }
+.return-banner { max-width: 40rem; margin: 0.5rem auto 1rem; }
+.return-banner p { margin: 0 0 0.35rem; }
+.return-log { margin: 0; padding-left: 1.2rem; font-size: 0.85rem; }
+.offerings { max-width: 46rem; margin: 0 auto 1.5rem; }
+.offering-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.5rem; }
+.offering {
+  display: flex; flex-wrap: wrap; gap: 0.4rem 0.75rem; align-items: baseline;
+  padding: 0.5rem 0.75rem; border: 1px solid var(--banner-line); border-left: 3px solid var(--marigold);
+  border-radius: 0.35rem; background: var(--banner-bg);
+}
+.offering .offering-label { color: var(--marigold); font-weight: bold; }
+.offering .offering-text { white-space: pre-wrap; word-break: break-word; }
+.offering-evidence { color: var(--muted); font-size: 0.8rem; }
+.visually-hidden {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
 @media (max-width: 640px) {
   .altar-photo { flex-basis: 9.5rem; min-width: 8.5rem; }
   .photo-frame { width: 5rem; }
@@ -662,6 +699,8 @@ tr.memory-enshrined .memory-count { margin-left: 0.4rem; }
   animation: bell-arrive 0.6s ease-out;
 }
 .bell-worse { border-left-color: #e07a76; }
+.bell-returned { border-left-color: var(--marigold); }
+.bell-photo { align-self: center; }
 .bell-text { margin: 0; }
 .bell-actions { display: flex; gap: 0.5rem; }
 .bell-actions form { margin: 0; }

@@ -224,3 +224,7 @@ func eventTime(e EventRecord) *time.Time {
 	}
 	return nil
 }
+
+// ImportantLine reports whether a log line looks like an error: the rule that
+// keeps a log line as evidence even when it is not among the last lines.
+func ImportantLine(line string) bool { return importantLine.MatchString(line) }

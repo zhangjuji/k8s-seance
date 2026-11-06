@@ -83,7 +83,8 @@
     dismiss: {{T "bell_dismiss"}},
     soundOn: {{T "bell_sound_on"}},
     soundOff: {{T "bell_sound_off"}},
-    massPods: {{T "mass_pods"}}
+    massPods: {{T "mass_pods"}},
+    openPhoto: {{T "bell_open_photo"}}
   };
   var maxNotices = 8;
 
@@ -123,6 +124,12 @@
     item.appendChild(el('p', 'bell-text', sp.text));
     var actions = el('div', 'bell-actions');
     actions.appendChild(summonForm(sp));
+    // A return links to the photo on the altar. url is a server path such as /graveyard/<id>.
+    if (kind === 'returned' && /^\/graveyard\/[0-9a-f]{12}$/.test(sp.url || '')) {
+      var a = el('a', 'bell-photo', text.openPhoto);
+      a.href = sp.url;
+      actions.appendChild(a);
+    }
     var x = el('button', 'bell-dismiss', text.dismiss);
     x.type = 'button';
     x.addEventListener('click', function () { item.remove(); });
@@ -212,12 +219,15 @@
     var fresh = {};
     d.arrived.forEach(function (a) { notice(a, 'arrived'); fresh[a.name] = true; });
     d.worse.forEach(function (w) { notice(w, 'worse'); fresh[w.name] = true; });
+    (d.returned || []).forEach(function (r) { notice(r, 'returned'); fresh[r.name] = true; });
     d.mass.forEach(massCard);
     var rows = document.querySelectorAll('#spirit-rows tr[data-pod]');
     for (var i = 0; i < rows.length; i++) {
       if (fresh[rows[i].getAttribute('data-pod')]) { rows[i].classList.add('fresh'); }
     }
-    if (d.mass.length) { ring(3); } else if (d.arrived.length || d.worse.length) { ring(1); }
+    // A return to the altar rings twice, a mass grave three times.
+    var returned = (d.returned || []).length;
+    if (d.mass.length) { ring(3); } else if (returned) { ring(2); } else if (d.arrived.length || d.worse.length) { ring(1); }
   });
 })();
 </script>
@@ -226,7 +236,7 @@
 {{define "spirit_rows"}}{{range .Rows}}
       {{/* An enshrined row (on the altar) never fades and never raises the banner: memory.js skips data-enshrined. */}}
       {{if .Enshrined}}<tr data-pod="{{.Name}}" data-enshrined class="memory-enshrined">{{else}}<tr data-pod="{{.Name}}"{{if .HasMemory}} data-memory-scope class="{{.Memory.Class}}"{{end}}>{{end}}
-        <td>{{.Name}}</td>
+        <td>{{.Name}}{{if .ReturnN}} <a class="return-mark" href="{{.ReturnURL}}" title="{{T "return_mark_title"}}">{{Tf "return_mark" .ReturnN}}</a>{{end}}</td>
         <td>{{.Namespace}}</td>
         <td><span class="badge {{.BadgeClass}}">{{.Cause}}</span></td>
         <td>{{.RestartCount}}</td>

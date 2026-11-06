@@ -257,3 +257,39 @@ func EnvValue(name, value string) (shown string, hidden bool) {
 	}
 	return value, false
 }
+
+// replicaSetHash matches the "-<pod-template-hash>" suffix of a ReplicaSet name.
+var replicaSetHash = regexp.MustCompile(`^(.+)-[a-z0-9]+$`)
+
+// FamilyOf returns the controller family of a as "Kind/name", for example
+// "Deployment/web" (Requirement 18.2), or "" when the Pod belongs to no
+// Deployment, StatefulSet or DaemonSet. A collected Lineage gives the exact
+// family. Without one (fixtures, tombstones) the family is inferred from the
+// owner: a ReplicaSet named "<name>-<hash>" belongs to Deployment <name>.
+func FamilyOf(a *PodAutopsy) string {
+	if a == nil {
+		return ""
+	}
+	if a.Lineage != nil && a.Lineage.OwnerKind != "" && a.Lineage.OwnerName != "" {
+		return a.Lineage.Owner()
+	}
+	return FamilyFromOwner(a.OwnerKind, a.OwnerName)
+}
+
+// FamilyFromOwner infers the family "Kind/name" from a Pod's owner reference.
+func FamilyFromOwner(kind, name string) string {
+	if name == "" {
+		return ""
+	}
+	switch kind {
+	case "ReplicaSet":
+		m := replicaSetHash.FindStringSubmatch(name)
+		if m == nil {
+			return ""
+		}
+		return "Deployment/" + m[1]
+	case "StatefulSet", "DaemonSet":
+		return kind + "/" + name
+	}
+	return ""
+}

@@ -311,6 +311,10 @@ type spiritRow struct {
 	// AltarURL links to its photo.
 	Enshrined bool
 	AltarURL  string
+	// ReturnN is set when the spirit's latest death is a return to a tombstone
+	// (Requirement 18.3): the Nth return, linked to that photo at ReturnURL.
+	ReturnN   int
+	ReturnURL string
 }
 
 // handleSpiritsPage renders the list page. A cluster problem is shown as a notice on a 200 page.
@@ -342,7 +346,7 @@ func (s *Server) handleSpiritsPage(w http.ResponseWriter, r *http.Request) {
 		if lerr != nil {
 			page.Notice = trf(lang, "read_spirits_failed", lerr.Error())
 		}
-		page.Rows = rowsOf(lang, spirits, s.enshrinedSpirits())
+		page.Rows = rowsOf(lang, spirits, s.visitAltar(spirits))
 		page.MemoryBanner = anyFading(page.Rows)
 	}
 
@@ -356,9 +360,10 @@ func (s *Server) handleSpiritsPage(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(buf.Bytes())
 }
 
-// rowsOf formats summaries for the table in lang. Spirits in altar are marked
-// enshrined. A nil altar enshrines nothing.
-func rowsOf(lang string, spirits []autopsy.SpiritSummary, altar enshrined) []spiritRow {
+// rowsOf formats summaries for the table in lang. Spirits on the altar are
+// marked enshrined, and spirits that returned get their return number. A nil
+// altar enshrines nothing.
+func rowsOf(lang string, spirits []autopsy.SpiritSummary, altar *altarVisit) []spiritRow {
 	rows := make([]spiritRow, 0, len(spirits))
 	for _, sp := range spirits {
 		row := spiritRow{
@@ -377,6 +382,10 @@ func rowsOf(lang string, spirits []autopsy.SpiritSummary, altar enshrined) []spi
 		if id, ok := altar.lookup(sp.Namespace, sp.Name); ok {
 			row.Enshrined = true
 			row.AltarURL = tombstoneURL(id)
+		}
+		if m, ok := altar.returnOf(sp.Namespace, sp.Name); ok {
+			row.ReturnN = m.N
+			row.ReturnURL = m.URL
 		}
 		rows = append(rows, row)
 	}

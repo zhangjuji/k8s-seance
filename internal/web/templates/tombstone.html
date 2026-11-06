@@ -11,13 +11,33 @@
           <span class="badge {{.Stone.BadgeClass}}">{{.Stone.Cause}}</span>
           <span class="photo-dates"><span>{{Tf "born" .Stone.Born}}</span><span>{{Tf "died" .Stone.Died}}</span></span>
           {{if .Stone.Epitaph}}<span class="photo-epitaph">“{{.Stone.Epitaph}}”</span>{{end}}
+          {{if .Stone.Family}}<span class="photo-family">{{Tf "tomb_family" .Stone.Family}}</span>{{end}}
+          {{template "return_candles" .Stone}}
         </span>
       </header>
       {{template "altar_step"}}
     </section>
     {{template "petal_path"}}
   </div>
+  {{if .Stone.Returns}}
+  <div class="banner return-banner" role="alert">
+    <p>{{Tf "tomb_returned" .Stone.Returns}}</p>
+    <ul class="return-log">{{range .Stone.ReturnLog}}<li>{{Tf "tomb_return_item" .Pod .Died .Cause}}</li>{{end}}</ul>
+  </div>
+  {{end}}
   <p class="photo-remembered">{{T "tomb_remembered"}}</p>
+  <section class="offerings" aria-labelledby="offerings-heading">
+    <h2 id="offerings-heading">{{T "offerings_heading"}}</h2>
+    {{if .Stone.Offerings}}
+    <ul class="offering-list">{{range .Stone.Offerings}}
+      <li class="offering offering-{{.Kind}}">
+        <span class="offering-label">{{T .LabelKey}}</span>
+        <code class="offering-text">{{.Text}}</code>
+        {{if .Evidence}}<span class="offering-evidence">{{Tf "offering_evidence" (print "[" .Evidence "]")}}</span>{{end}}
+      </li>{{end}}
+    </ul>
+    {{else}}<p>{{T "offerings_none"}}</p>{{end}}
+  </section>
   <h2>{{T "pm_heading"}}</h2>
   {{template "postmortem" .PM}}
 </section>{{end}}

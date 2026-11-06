@@ -95,4 +95,8 @@ type SpiritSummary struct {
 	// Memory is how long the cluster still keeps the spirit's events
 	// (Requirement 14). The k8s list leaves it nil. The web sources fill it.
 	Memory *Memory `json:"memory,omitempty"`
+	// Family is the controller family as "Kind/name", for example
+	// "Deployment/web" (Requirement 18.2). Empty when the Pod has none. The
+	// cluster list reads the revision labels; the fixtures use FamilyOf.
+	Family string `json:"family,omitempty"`
 }

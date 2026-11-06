@@ -127,10 +127,10 @@
   - [x] 17.2 视觉打磨：遗忘面板平时折叠、快消散时自动展开；回答的 Markdown 粗体/代码安全渲染；列表页标语；手机端降灵板、差异表、导航
     - _Requirements: 17.4, 17.5_
 
-- [ ] 18. 供品与归来
-  - [ ] 18.1 `graveyard`：`Offering`、`OfferingsFor`、`Family`、`Return`、`Match`；立碑时保存家族与供品
+- [x] 18. 供品与归来
+  - [x] 18.1 `graveyard`：`Offering`、`OfferingsFor`、`Family`、`Return`、`Match`；立碑时保存家族与供品
     - _Requirements: 18.1, 18.2, 18.4_
-  - [ ] 18.2 列表 / 招魂铃 / 祭坛 / 照片页显示归来与供品；`SpiritSummary.Family`
+  - [x] 18.2 列表 / 招魂铃 / 祭坛 / 照片页显示归来与供品；`SpiritSummary.Family`
     - _Requirements: 18.2, 18.3, 18.5_
 
 - [ ] 19. 施法（真的复活）

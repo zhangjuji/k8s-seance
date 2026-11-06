@@ -286,7 +286,7 @@ func (s *Server) newSeance(id, source, lang string, a *autopsy.PodAutopsy, cls a
 		se.evIDs[e.ID] = true
 	}
 	if s.opts.Graveyard != nil {
-		se.bury = func(res postmortem.Result) string { return s.buryTombstone(a, cls, res) }
+		se.bury = func(res postmortem.Result) string { return s.buryTombstone(a, cls, ev, res) }
 	}
 	se.sess = spirit.NewSessionIn(lang, id, a, cls, ev, s.opts.Provider, s.opts.Limits, s.cache, s.opts.Model)
 	return se

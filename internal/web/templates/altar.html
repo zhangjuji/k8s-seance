@@ -20,4 +20,12 @@
   <span class="badge {{.BadgeClass}}">{{.Cause}}</span>
   <span class="photo-dates"><span>{{Tf "born" .Born}}</span><span>{{Tf "died" .Died}}</span></span>
   {{if .Epitaph}}<span class="photo-epitaph">“{{.Epitaph}}”</span>{{end}}
+  {{template "photo_offerings" .}}
+  {{template "return_candles" .}}
 </span>{{end}}
+
+{{/* photo_offerings is the short list of offerings under a photo (Requirement 18.1). */}}
+{{define "photo_offerings"}}{{if .Offerings}}<span class="photo-offerings">{{range .Offerings}}<span class="photo-offering offering-{{.Kind}}" title="{{T .LabelKey}}"><span class="offering-label">{{T .LabelKey}}</span> <span class="offering-text">{{.Text}}</span></span>{{end}}</span>{{end}}{{end}}
+
+{{/* return_candles: one small candle for each return, at most 7 (Requirement 18.3). */}}
+{{define "return_candles"}}{{if .Returns}}<span class="return-candles" title="{{Tf "altar_returns" .Returns}}"><span class="visually-hidden">{{Tf "altar_returns" .Returns}}</span>{{range .Candles}}<span class="return-candle" aria-hidden="true"><span class="altar-flame"></span></span>{{end}}</span>{{end}}{{end}}

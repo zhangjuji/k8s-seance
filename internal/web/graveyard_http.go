@@ -25,7 +25,9 @@ func (s *Server) registerGraveyardRoutes(mux *http.ServeMux) {
 
 // buryTombstone stores the postmortem of a as its tombstone and returns the ID.
 // A failed write is logged and returns "", so the postmortem is still served.
-func (s *Server) buryTombstone(a *autopsy.PodAutopsy, cls autopsy.Classification, res postmortem.Result) string {
+// The tombstone also keeps the family and the offerings, picked from ev, the
+// redacted séance evidence (Requirement 18.1).
+func (s *Server) buryTombstone(a *autopsy.PodAutopsy, cls autopsy.Classification, ev []autopsy.Evidence, res postmortem.Result) string {
 	t := graveyard.Tombstone{
 		PodName:      a.Name,
 		Namespace:    a.Namespace,
@@ -33,6 +35,8 @@ func (s *Server) buryTombstone(a *autopsy.PodAutopsy, cls autopsy.Classification
 		Cause:        cls.Cause,
 		Epitaph:      res.LastWords,
 		PostmortemMD: res.Markdown,
+		Family:       autopsy.FamilyOf(a),
+		Offerings:    graveyard.OfferingsFor(a, cls, ev),
 	}
 	if !a.CreatedAt.IsZero() {
 		t.BornAt = a.CreatedAt.UTC()
@@ -61,6 +65,12 @@ type tombstoneItem struct {
 	BuriedAt      time.Time            `json:"buriedAt"`
 	URL           string               `json:"url"`
 	PostmortemURL string               `json:"postmortemUrl"`
+	// Family, Offerings and Returns come from Requirement 18. Returns is the
+	// return count, ReturnLog the returns themselves, oldest first.
+	Family    string               `json:"family,omitempty"`
+	Offerings []graveyard.Offering `json:"offerings"`
+	Returns   int                  `json:"returns"`
+	ReturnLog []graveyard.Return   `json:"returnLog"`
 }
 
 // graveyardResponse is the body of GET /api/graveyard.
@@ -93,6 +103,10 @@ func (s *Server) handleGraveyardAPI(w http.ResponseWriter, r *http.Request) {
 			BuriedAt:      t.BuriedAt,
 			URL:           tombstoneURL(t.ID),
 			PostmortemURL: tombstoneDownloadURL(t.ID),
+			Family:        t.Family,
+			Offerings:     nonNil(t.Offerings),
+			Returns:       len(t.Returns),
+			ReturnLog:     nonNil(t.Returns),
 		})
 	}
 	writeJSON(w, http.StatusOK, graveyardResponse{Tombstones: items})
@@ -118,10 +132,41 @@ type stoneView struct {
 	Born       string
 	Died       string
 	Epitaph    string
+	// Family is "Kind/name" or "".
+	Family string
+	// Offerings are the key evidence kept with the postmortem (Requirement 18.1).
+	Offerings []offeringView
+	// Returns is how many times the spirit returned. Candles holds one entry
+	// per return, at most maxCandles, for the small candles on its photo.
+	// ReturnLog lists the latest returns, newest first (Requirement 18.3).
+	Returns   int
+	Candles   []struct{}
+	ReturnLog []returnView
+}
+
+// maxCandles is the number of return candles drawn on one photo.
+const maxCandles = 7
+
+// maxReturnLog is the number of returns listed on the photo page.
+const maxReturnLog = 10
+
+// offeringView is one offering. LabelKey is its catalog key.
+type offeringView struct {
+	Kind     string
+	LabelKey string
+	Text     string
+	Evidence string
+}
+
+// returnView is one return, formatted for display.
+type returnView struct {
+	Pod   string
+	Died  string
+	Cause string
 }
 
 func stoneOf(t graveyard.Tombstone) stoneView {
-	return stoneView{
+	v := stoneView{
 		ID:         t.ID,
 		URL:        tombstoneURL(t.ID),
 		Pod:        t.PodName,
@@ -131,7 +176,26 @@ func stoneOf(t graveyard.Tombstone) stoneView {
 		Born:       formatTime(timePtr(t.BornAt)),
 		Died:       formatTime(timePtr(t.DiedAt)),
 		Epitaph:    t.Epitaph,
+		Family:     t.Family,
+		Returns:    len(t.Returns),
+		Candles:    make([]struct{}, min(len(t.Returns), maxCandles)),
 	}
+	for _, o := range t.Offerings {
+		v.Offerings = append(v.Offerings, offeringView{Kind: o.Kind, LabelKey: "offering_" + o.Kind, Text: o.Text, Evidence: o.Evidence})
+	}
+	for i := len(t.Returns) - 1; i >= 0 && len(v.ReturnLog) < maxReturnLog; i-- {
+		r := t.Returns[i]
+		v.ReturnLog = append(v.ReturnLog, returnView{Pod: r.Pod, Died: formatTime(timePtr(r.DiedAt)), Cause: causeLabel(r.Cause)})
+	}
+	return v
+}
+
+// nonNil returns s, or an empty slice for nil, so JSON shows [] instead of null.
+func nonNil[T any](s []T) []T {
+	if s == nil {
+		return []T{}
+	}
+	return s
 }
 
 // handleGraveyardPage renders the ofrenda: the tombstones as framed photos on

@@ -47,3 +47,30 @@ func TestEventsFor(t *testing.T) {
 		})
 	}
 }
+
+// TestSummaryFamily: the list row carries the family from the revision labels
+// (Requirement 18.2), so a return can be matched to a tombstone of its family.
+func TestSummaryFamily(t *testing.T) {
+	yes := true
+	pod := func(kind, owner string, labels map[string]string) *corev1.Pod {
+		p := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "p", Labels: labels}}
+		if kind != "" {
+			p.OwnerReferences = []metav1.OwnerReference{{Kind: kind, Name: owner, Controller: &yes}}
+		}
+		return p
+	}
+	tests := []struct {
+		pod  *corev1.Pod
+		want string
+	}{
+		{pod("ReplicaSet", "web-5c6d7f8b9", map[string]string{labelPodTemplateHash: "5c6d7f8b9"}), "Deployment/web"},
+		{pod("StatefulSet", "db", map[string]string{labelControllerRevision: "db-6f9c"}), "StatefulSet/db"},
+		{pod("ReplicaSet", "lonely", nil), ""},
+		{pod("", "", nil), ""},
+	}
+	for _, tt := range tests {
+		if got := summarize(tt.pod).Family; got != tt.want {
+			t.Errorf("Family = %q, want %q", got, tt.want)
+		}
+	}
+}

@@ -47,6 +47,86 @@ type Tombstone struct {
 	Epitaph      string               `json:"epitaph"`
 	PostmortemMD string               `json:"postmortemMD"`
 	BuriedAt     time.Time            `json:"buriedAt"`
+	// Family is the controller family as "Kind/name" (Requirement 18.2), or ""
+	// when the Pod has none.
+	Family string `json:"family,omitempty"`
+	// Offerings are the key evidence kept with the postmortem (Requirement 18.1).
+	Offerings []Offering `json:"offerings,omitempty"`
+	// Returns lists each death after the burial, oldest first. Burying the Pod
+	// again replaces the tombstone and clears them (Requirement 18.4).
+	Returns []Return `json:"returns,omitempty"`
+}
+
+// Return is one visit of the dead: the enshrined Pod died again, or another
+// Pod of its family died, after the tombstone was set (Requirement 18.2).
+type Return struct {
+	Pod    string               `json:"pod"`
+	DiedAt time.Time            `json:"diedAt"`
+	Cause  autopsy.CauseOfDeath `json:"cause,omitempty"`
+	// SeenAt is when K8s Séance noticed the return.
+	SeenAt time.Time `json:"seenAt"`
+}
+
+// Counts reports whether a death of pod at diedAt is a new return to t. The
+// death must come after the burial. The enshrined Pod itself returns once for
+// each new death time; every other Pod of the family returns once.
+func (t Tombstone) Counts(pod string, diedAt time.Time) bool {
+	if pod == "" || diedAt.IsZero() || !diedAt.After(t.BuriedAt) {
+		return false
+	}
+	if pod == t.PodName {
+		if !t.DiedAt.IsZero() && !diedAt.After(t.DiedAt) {
+			return false
+		}
+		for _, r := range t.Returns {
+			if r.Pod == pod && r.DiedAt.Equal(diedAt) {
+				return false
+			}
+		}
+		return true
+	}
+	for _, r := range t.Returns {
+		if r.Pod == pod {
+			return false
+		}
+	}
+	return true
+}
+
+// LastReturnOf returns the number (from 1) and the record of the latest return
+// of pod to t.
+func (t Tombstone) LastReturnOf(pod string) (int, Return, bool) {
+	for i := len(t.Returns) - 1; i >= 0; i-- {
+		if t.Returns[i].Pod == pod {
+			return i + 1, t.Returns[i], true
+		}
+	}
+	return 0, Return{}, false
+}
+
+// Match finds the tombstone a spirit visits: first the tombstone of the Pod
+// itself (namespace and name), then the most recently buried tombstone of its
+// family in the same namespace. family is "Kind/name" or "" for none.
+func Match(all []Tombstone, namespace, pod, family string) (Tombstone, bool) {
+	for _, t := range all {
+		if t.Namespace == namespace && t.PodName == pod {
+			return t, true
+		}
+	}
+	if family == "" {
+		return Tombstone{}, false
+	}
+	var best Tombstone
+	found := false
+	for _, t := range all {
+		if t.Namespace != namespace || t.Family != family {
+			continue
+		}
+		if !found || t.BuriedAt.After(best.BuriedAt) || (t.BuriedAt.Equal(best.BuriedAt) && t.ID < best.ID) {
+			best, found = t, true
+		}
+	}
+	return best, found
 }
 
 // ID returns the tombstone ID of a Pod: the first 12 hex characters of the
@@ -109,7 +189,8 @@ func (s *Store) Get(id string) (Tombstone, error) {
 }
 
 // Bury stores t and returns it with its ID and burial time set. When the Pod
-// already has a tombstone, it is replaced. The file is read in full, merged and
+// already has a tombstone, it is replaced, and its returns start again from
+// zero (Requirement 18.4). The file is read in full, merged and
 // written to a temporary file that then replaces the original, so a crash never
 // leaves half a file. If the file cannot be read or parsed, nothing is written.
 func (s *Store) Bury(t Tombstone) (Tombstone, error) {
@@ -118,6 +199,7 @@ func (s *Store) Bury(t Tombstone) (Tombstone, error) {
 	}
 	t.ID = ID(t.Namespace, t.PodName, t.UID)
 	t.BuriedAt = s.now().UTC()
+	t.Returns = nil
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -140,6 +222,35 @@ func (s *Store) Bury(t Tombstone) (Tombstone, error) {
 		return Tombstone{}, err
 	}
 	return t, nil
+}
+
+// Return records r on the tombstone id when it counts as a new return (see
+// Tombstone.Counts). It returns the tombstone as stored and whether r was
+// recorded. SeenAt is set to now. Nothing is written when r does not count.
+func (s *Store) Return(id string, r Return) (Tombstone, bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	all, err := s.load()
+	if err != nil {
+		return Tombstone{}, false, err
+	}
+	for i := range all {
+		t := &all[i]
+		if t.ID != id {
+			continue
+		}
+		if !t.Counts(r.Pod, r.DiedAt) {
+			return *t, false, nil
+		}
+		r.DiedAt = r.DiedAt.UTC()
+		r.SeenAt = s.now().UTC()
+		t.Returns = append(t.Returns, r)
+		if err := s.save(all); err != nil {
+			return Tombstone{}, false, err
+		}
+		return *t, true, nil
+	}
+	return Tombstone{}, false, ErrNotFound
 }
 
 // load reads the file. A missing file is an empty graveyard. The caller holds mu.

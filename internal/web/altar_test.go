@@ -387,7 +387,7 @@ func TestLiveRowsEnshrined(t *testing.T) {
 		Namespace: "ns1", Name: "kept", Cause: autopsy.CauseCrashLoopBackOff, RestartCount: 2,
 		Memory: &autopsy.Memory{Key: &autopsy.FadingEvent{Reason: "BackOff", FadesAt: fades}, LeftSeconds: 300},
 	}}
-	if rowsSignature(llm.LangZH, spirits, nil) == rowsSignature(llm.LangZH, spirits, enshrined{"ns1/kept": "abcdefabcdef"}) {
+	if rowsSignature(llm.LangZH, spirits, nil) == rowsSignature(llm.LangZH, spirits, &altarVisit{shrine: enshrined{"ns1/kept": "abcdefabcdef"}}) {
 		t.Error("enshrining a spirit does not change the rows signature")
 	}
 

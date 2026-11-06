@@ -151,3 +151,41 @@ func TestEnvValue(t *testing.T) {
 		}
 	}
 }
+
+func TestFamilyOf(t *testing.T) {
+	tests := []struct {
+		kind, name string
+		want       string
+	}{
+		{"ReplicaSet", "memory-glutton-7cc6df9966", "Deployment/memory-glutton"},
+		{"ReplicaSet", "second-life-5b9d8c7f6d", "Deployment/second-life"},
+		{"ReplicaSet", "nohash", ""},
+		{"ReplicaSet", "", ""},
+		{"StatefulSet", "db", "StatefulSet/db"},
+		{"DaemonSet", "agent", "DaemonSet/agent"},
+		{"Job", "migrate", ""},
+		{"", "", ""},
+	}
+	for _, tt := range tests {
+		a := &PodAutopsy{OwnerKind: tt.kind, OwnerName: tt.name}
+		if got := FamilyOf(a); got != tt.want {
+			t.Errorf("FamilyOf(%s %s) = %q, want %q", tt.kind, tt.name, got, tt.want)
+		}
+	}
+	// The collected lineage wins over the inferred owner.
+	a := &PodAutopsy{OwnerKind: "ReplicaSet", OwnerName: "x-abc", Lineage: &Lineage{OwnerKind: "Deployment", OwnerName: "real"}}
+	if got := FamilyOf(a); got != "Deployment/real" {
+		t.Errorf("with lineage: %q", got)
+	}
+	if FamilyOf(nil) != "" {
+		t.Error("FamilyOf(nil) is not empty")
+	}
+}
+
+func TestImportantLine(t *testing.T) {
+	for line, want := range map[string]bool{"FATAL: no config": true, "panic: nil": true, "all good": false} {
+		if ImportantLine(line) != want {
+			t.Errorf("ImportantLine(%q) = %v", line, !want)
+		}
+	}
+}

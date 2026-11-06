@@ -177,6 +177,9 @@ func summarize(pod *corev1.Pod) autopsy.SpiritSummary {
 		Namespace: pod.Namespace,
 		Name:      pod.Name,
 	}
+	if f, ok := familyOf(pod); ok {
+		s.Family = f.kind + "/" + f.name
+	}
 
 	var latest time.Time
 	consider := func(finished metav1.Time) {
