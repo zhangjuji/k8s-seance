@@ -74,6 +74,14 @@ var catalog = map[string]map[string]string{
 		"no_answer":       "亡灵没有应答，请稍后再试。",
 		"pm_timeout":      "复盘生成超时，请稍后再试。",
 
+		"doubt_title":    "亡灵可能在说谎",
+		"doubt_note":     "以下说法在证据里对不上。没有列出的话也只表示没有发现矛盾，不表示已验证。",
+		"doubt_citation": "引用 %s 不在证据列表里",
+		"doubt_memory":   "内存数量 %s 在证据里找不到",
+		"doubt_exitCode": "退出码说法「%s」与证据不符",
+		"doubt_restarts": "重启次数说法「%s」与证据不符",
+		"doubt_time":     "时间 %s 与证据和死亡时间都对不上",
+
 		"pm_aria":        "复盘",
 		"pm_copy":        "复制",
 		"pm_copied":      "已复制",
@@ -135,6 +143,14 @@ var catalog = map[string]map[string]string{
 		"lang_mismatch":   "This séance is held in %s. Switching the language only changes the interface.",
 		"no_answer":       "The spirit did not answer. Try again later.",
 		"pm_timeout":      "The postmortem timed out. Try again later.",
+
+		"doubt_title":    "The spirit may be lying",
+		"doubt_note":     "These claims do not match the evidence. Anything not listed only means no contradiction was found, not that it is verified.",
+		"doubt_citation": "Citation %s is not in the evidence list",
+		"doubt_memory":   "Memory quantity %s is not in the evidence",
+		"doubt_exitCode": "Exit code claim \"%s\" does not match the evidence",
+		"doubt_restarts": "Restart count claim \"%s\" does not match the evidence",
+		"doubt_time":     "Time %s matches neither the evidence nor the time of death",
 
 		"pm_aria":        "Postmortem",
 		"pm_copy":        "Copy",

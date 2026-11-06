@@ -183,12 +183,46 @@ type openingRun struct {
 	err  error
 }
 
-// turnRecord is a completed turn. HTML is the rendered turn fragment.
+// turnRecord is a completed turn. HTML is the rendered turn fragment. Doubts
+// are the fact-check findings of a spirit turn, and empty for a user turn.
 type turnRecord struct {
 	Index   int
 	Role    string
 	Content string
 	HTML    string
+	Doubts  []doubtItem
+}
+
+// payload returns the data of the turn event for t.
+func (t turnRecord) payload() turnPayload {
+	return turnPayload{Index: t.Index, Role: t.Role, Content: t.Content, HTML: t.HTML, Doubts: t.Doubts}
+}
+
+// doubtItem is one claim of the spirit that the evidence does not back up
+// (Requirement 11). Message describes it in the séance language.
+type doubtItem struct {
+	Kind     string `json:"kind"`
+	Claim    string `json:"claim"`
+	Sentence string `json:"sentence"`
+	Message  string `json:"message"`
+}
+
+// doubtsFor fact-checks a spirit reply. The exhausted line is not a reply, so
+// it is not checked. The result is never nil, so JSON shows [] for no doubts.
+func (se *seance) doubtsFor(role, content string) []doubtItem {
+	out := []doubtItem{}
+	if role != roleSpirit || llm.IsExhaustedLine(content) {
+		return out
+	}
+	for _, f := range se.sess.FactCheck(content) {
+		out = append(out, doubtItem{
+			Kind:     f.Kind,
+			Claim:    f.Claim,
+			Sentence: f.Sentence,
+			Message:  trf(se.lang, "doubt_"+f.Kind, f.Claim),
+		})
+	}
+	return out
 }
 
 // subscriber is one open stream. Senders stop waiting for it once gone is closed.
@@ -204,12 +238,14 @@ type sseEvent struct {
 	data  []byte
 }
 
-// turnPayload is the data of an `event: turn` line.
+// turnPayload is the data of an `event: turn` line. Doubts is [] when the
+// fact check found nothing, which does not mean the reply is verified.
 type turnPayload struct {
-	Index   int    `json:"index"`
-	Role    string `json:"role"`
-	Content string `json:"content"`
-	HTML    string `json:"html"`
+	Index   int         `json:"index"`
+	Role    string      `json:"role"`
+	Content string      `json:"content"`
+	HTML    string      `json:"html"`
+	Doubts  []doubtItem `json:"doubts"`
 }
 
 // deltaPayload is the data of an `event: delta` line.
@@ -385,8 +421,9 @@ func (se *seance) addTurn(role, content string, used, left int) turnRecord {
 		Index:   len(se.turns),
 		Role:    role,
 		Content: content,
+		Doubts:  se.doubtsFor(role, content),
 	}
-	rec.HTML = se.renderTurn(rec.Index, role, content, used, left)
+	rec.HTML = se.renderTurn(rec.Index, role, content, rec.Doubts, used, left)
 	se.turns = append(se.turns, rec)
 	if rec.Index == 0 {
 		se.openingDone = true
@@ -398,7 +435,7 @@ func (se *seance) addTurn(role, content string, used, left int) turnRecord {
 	ev := sseEvent{
 		name:  eventTurn,
 		index: rec.Index,
-		data:  mustJSON(turnPayload{Index: rec.Index, Role: role, Content: content, HTML: rec.HTML}),
+		data:  mustJSON(rec.payload()),
 	}
 	for _, sub := range subs {
 		sub.deliver(ev)
@@ -455,6 +492,8 @@ type turnView struct {
 	Who    string
 	Body   template.HTML
 	Advice bool
+	// Doubts are listed under the reply as "the spirit may be lying".
+	Doubts []doubtItem
 	Used   int
 	Left   int
 }
@@ -462,13 +501,14 @@ type turnView struct {
 // renderTurn builds the HTML fragment of one turn in the séance language. The
 // text is escaped first, and then each [E#] that names a known evidence item
 // becomes a link to its card.
-func (se *seance) renderTurn(index int, role, content string, used, left int) string {
+func (se *seance) renderTurn(index int, role, content string, doubts []doubtItem, used, left int) string {
 	v := turnView{
 		Index:  index,
 		Role:   role,
 		Who:    tr(se.lang, "who_user"),
 		Body:   se.linkEvidence(content),
 		Advice: role == roleSpirit && isAdvice(content),
+		Doubts: doubts,
 		Used:   used,
 		Left:   left,
 	}

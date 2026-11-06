@@ -79,10 +79,10 @@
   - [x] 10.4 用真实接口录制英文回放 `fixtures/replay/<pod>-en.json`（`demo/record-english.sh`，deepseek-flash）
     - _Requirements: 10.3_
 
-- [ ] 11. 谎言检测
-  - [ ] 11.1 `internal/spirit/factcheck.go`：引用、内存数量、退出码、重启次数、时间戳核对；建议句豁免数量；表驱动测试 + 录音零误报测试
+- [x] 11. 谎言检测
+  - [x] 11.1 `internal/spirit/factcheck.go`：引用、内存数量、退出码、重启次数、时间戳核对；建议句豁免数量；表驱动测试 + 录音零误报测试
     - _Requirements: 11.1, 11.3, 11.4_
-  - [ ] 11.2 Web：回答下方显示「亡灵可能在说谎」，JSON / SSE 带 `doubts`
+  - [x] 11.2 Web：回答下方显示「亡灵可能在说谎」，JSON / SSE 带 `doubts`
     - _Requirements: 11.2_
 
 - [ ] 12. 招魂铃

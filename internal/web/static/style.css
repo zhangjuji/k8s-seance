@@ -287,6 +287,18 @@ tbody tr:hover { background: rgba(255, 179, 71, 0.04); }
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+/* Fact-check doubts under a spirit reply (Requirement 11). */
+.doubts {
+  margin-top: 0.5rem;
+  padding: 0.4rem 0.6rem;
+  border: 1px dashed #c0504d;
+  border-radius: 0.3rem;
+  background: rgba(192, 80, 77, 0.1);
+  font-size: 0.85rem;
+}
+.doubts-title { color: #e07a76; }
+.doubts ul { margin: 0.25rem 0; padding-left: 1.2rem; }
+.doubts-note { margin: 0; color: var(--muted); font-size: 0.75rem; }
 .ev-link {
   color: var(--accent);
   text-decoration: underline dotted;

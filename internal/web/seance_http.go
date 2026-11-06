@@ -64,6 +64,8 @@ type messageReply struct {
 	Exhausted       bool   `json:"exhausted"`
 	BudgetUsed      int    `json:"budgetUsed"`
 	BudgetRemaining int    `json:"budgetRemaining"`
+	// Doubts are the fact-check findings of the reply, [] when none.
+	Doubts []doubtItem `json:"doubts"`
 }
 
 // seanceDetail is the body of GET /api/seances/{id}.
@@ -81,9 +83,10 @@ type seanceDetail struct {
 }
 
 type transcriptItem struct {
-	Index   int    `json:"index"`
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	Index   int         `json:"index"`
+	Role    string      `json:"role"`
+	Content string      `json:"content"`
+	Doubts  []doubtItem `json:"doubts"`
 }
 
 type evidenceItem struct {
@@ -187,7 +190,7 @@ func (s *Server) handleGetSeance(w http.ResponseWriter, r *http.Request) {
 	turns := se.turnsSnapshot()
 	transcript := make([]transcriptItem, 0, len(turns))
 	for _, t := range turns {
-		transcript = append(transcript, transcriptItem{Index: t.Index, Role: t.Role, Content: t.Content})
+		transcript = append(transcript, transcriptItem{Index: t.Index, Role: t.Role, Content: t.Content, Doubts: t.Doubts})
 	}
 	evidence := make([]evidenceItem, 0, len(se.evidence))
 	for _, e := range se.evidence {
@@ -231,7 +234,7 @@ func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
 	defer se.unsubscribe(sub)
 
 	for _, t := range replay {
-		ev := sseEvent{name: eventTurn, index: t.Index, data: mustJSON(turnPayload{Index: t.Index, Role: t.Role, Content: t.Content, HTML: t.HTML})}
+		ev := sseEvent{name: eventTurn, index: t.Index, data: mustJSON(t.payload())}
 		if err := writeEvent(w, ev); err != nil {
 			return
 		}
@@ -322,6 +325,7 @@ func (s *Server) handleMessage(w http.ResponseWriter, r *http.Request) {
 			Exhausted:       res.exhausted,
 			BudgetUsed:      used,
 			BudgetRemaining: left,
+			Doubts:          res.reply.Doubts,
 		})
 	default:
 		http.Redirect(w, r, seancePageURL(se.id), http.StatusSeeOther)
