@@ -172,6 +172,7 @@ func TestBuildEvidenceRedaction(t *testing.T) {
 		{"key=value password", "password=hunter2", "password=[REDACTED]"},
 		{"key: value token", "token: abc", "token: [REDACTED]"},
 		{"bearer header", "Authorization: Bearer xyz", "Authorization: Bearer [REDACTED]"},
+		{"bearer as key value", "token: Bearer xyz", "token: [REDACTED] [REDACTED]"},
 		{"aws access key", "key AKIAABCDEFGHIJKLMNOP used", "key [REDACTED] used"},
 		{"secret with quotes", `secret="s3cr3t"`, "secret=[REDACTED]"},
 		{"api_key", "api_key=sk-123", "api_key=[REDACTED]"},

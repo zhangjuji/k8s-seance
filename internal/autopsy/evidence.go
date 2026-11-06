@@ -149,9 +149,11 @@ func collapseDuplicates(lines []string) []string {
 func Redact(s string) string { return redact(s) }
 
 // redact replaces secret values with [REDACTED] and keeps the key name visible.
+// The Bearer rule runs first: in "token: Bearer x" the key=value rule would
+// otherwise replace only the word "Bearer" and leave x visible.
 func redact(s string) string {
-	s = secretKV.ReplaceAllString(s, "${1}"+redacted)
 	s = bearerToken.ReplaceAllString(s, "${1}"+redacted)
+	s = secretKV.ReplaceAllString(s, "${1}"+redacted)
 	s = awsAccessKey.ReplaceAllString(s, redacted)
 	return s
 }
